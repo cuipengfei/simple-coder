@@ -2,67 +2,56 @@ package com.simplecoder.service;
 
 import com.simplecoder.model.ToolRequest;
 import com.simplecoder.model.ToolResponse;
-import com.simplecoder.tool.Tool;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
-
-import java.util.Map;
 
 /**
  * Core stateless agent service: single-turn processing of a ToolRequest.
+ * Now uses Spring AI native tool calling with @Tool annotated methods.
  */
 @Slf4j
 @Service
 public class AgentService {
 
-    private final Map<String, Tool> toolsByName; // injected map of tool beans
-    private final ToolSelectionStrategy toolSelectionStrategy;
+    private final ChatClient chatClient;
+    private final ToolsService toolsService;
 
-    public AgentService(Map<String, Tool> toolsByName, ToolSelectionStrategy toolSelectionStrategy) {
-        this.toolsByName = toolsByName;
-        this.toolSelectionStrategy = toolSelectionStrategy;
+    public AgentService(ChatClient chatClient, ToolsService toolsService) {
+        this.chatClient = chatClient;
+        this.toolsService = toolsService;
     }
 
     /**
-     * Process a single ToolRequest.
-     * @param request tool request
-     * @return ToolResponse from executed tool
+     * Process a single ToolRequest using Spring AI's native tool calling.
+     * The model automatically selects the appropriate tool and extracts parameters from natural language.
+     *
+     * @param request tool request with natural language prompt
+     * @return ToolResponse with tool execution result
      */
     public ToolResponse process(ToolRequest request) {
         try {
             request.validate();
-            String explicitType = request.getToolType();
-            String selected = explicitType;
 
-            if (explicitType == null || explicitType.isBlank()) {
-                explicitType = "auto"; // normalize
-            }
+            String contextSummary = request.buildContextSummary();
+            StringBuilder promptBuilder = new StringBuilder();
 
-            if ("auto".equalsIgnoreCase(explicitType)) {
-                selected = toolSelectionStrategy.selectTool(request);
-                log.info("Auto tool selection -> {}", selected);
+            if (contextSummary != null && !contextSummary.isBlank()) {
+                promptBuilder.append("Context History:\n").append(contextSummary).append("\n\n");
             }
 
-            Tool tool = toolsByName.get(selected);
-            if (tool == null) {
-                // Fallback: search by Tool.getName() in case map keys are bean names (e.g. readFileTool)
-                for (Tool t : toolsByName.values()) {
-                    if (t.getName() != null && selected != null && selected.equalsIgnoreCase(t.getName())) {
-                        tool = t;
-                        break;
-                    }
-                }
-            }
-            if (tool == null) {
-                return ToolResponse.error("Unknown tool: " + selected);
-            }
+            promptBuilder.append("User Request:\n").append(request.getPrompt());
 
-            ToolResponse resp = tool.execute(request);
-            // Prefix message with tool name for traceability
-            if (resp != null && resp.getMessage() != null) {
-                resp.setMessage(String.format("[tool=%s] %s", selected, resp.getMessage()));
-            }
-            return resp;
+            // Let Spring AI ChatClient handle tool selection and parameter extraction automatically
+            String result = chatClient.prompt()
+                    .user(promptBuilder.toString())
+                    .tools(toolsService)  // Register all @Tool annotated methods
+                    .call()
+                    .content();
+
+            log.info("Tool execution completed successfully");
+            return ToolResponse.success("Tool execution result", result);
+
         } catch (Exception e) {
             log.error("Failed to process ToolRequest", e);
             return ToolResponse.error("AgentService error", e.getMessage());

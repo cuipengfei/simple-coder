@@ -108,7 +108,7 @@
         // 将本次成功调用加入 contextHistory
         if (contextHistory.length >= MAX_HISTORY) { contextHistory.shift(); }
         contextHistory.push({
-          timestamp: Date.now(),
+          timestamp: new Date().toISOString(),
             prompt: prompt,
             result: truncate(json.data || json.message || '', 500)
         });
