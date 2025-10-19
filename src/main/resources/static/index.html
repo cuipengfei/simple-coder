@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Simple Coder Agent UI</title>
+  <style>
+    body { font-family: sans-serif; margin: 16px; }
+    h1 { margin-top: 0; }
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    textarea { width: 100%; height: 100px; }
+    select, button { padding: 4px 8px; }
+    #response { white-space: pre-wrap; background:#f7f7f7; padding:8px; border:1px solid #ccc; min-height:60px; }
+    #error { color:#b00020; font-weight:bold; }
+    #history { max-height:200px; overflow:auto; border:1px solid #ddd; padding:8px; background:#fafafa; }
+    .entry { border-bottom:1px dashed #ccc; padding:4px 0; }
+    .entry:last-child { border-bottom:none; }
+    .small { color:#666; font-size:12px; }
+  </style>
+</head>
+<body>
+  <h1>Simple Coder Agent</h1>
+  <div class="row">
+    <label style="flex:1; display:flex; flex-direction:column;">Prompt
+      <textarea id="prompt" placeholder="例如: Read src/main/java/com/simplecoder/service/AgentService.java lines 1-40"></textarea>
+    </label>
+    <label style="width:180px; display:flex; flex-direction:column;">Tool Type
+      <select id="toolType">
+        <option value="auto">auto</option>
+        <option value="read">read</option>
+        <option value="list">list</option>
+        <option value="search">search</option>
+        <option value="replace">replace</option>
+      </select>
+    </label>
+  </div>
+  <button id="sendBtn">发送请求</button>
+  <h2>响应</h2>
+  <div id="response"></div>
+  <div id="error"></div>
+  <h2>上下文历史 (客户端维护)</h2>
+  <div id="history"></div>
+
+<script>
+  // 客户端内存中的 contextHistory (数组元素结构: {timestamp, prompt, result})
+  const contextHistory = [];
+  const MAX_HISTORY = 20;
+
+  function buildContextHistoryForRequest() {
+    // 按服务端模型所需结构 (ToolRequest.contextHistory)
+    return contextHistory.map(e => ({ timestamp: e.timestamp, prompt: e.prompt, result: e.result }));
+  }
+
+  function truncate(str, max) {
+    if (!str) return str;
+    return str.length > max ? str.slice(0, max) + '... [truncated]' : str;
+  }
+
+  function renderHistory() {
+    const container = document.getElementById('history');
+    container.innerHTML = '';
+    contextHistory.slice().reverse().forEach(e => {
+      const div = document.createElement('div');
+      div.className = 'entry';
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'small';
+      timeDiv.textContent = new Date(e.timestamp).toLocaleTimeString();
+      const promptDiv = document.createElement('div');
+      promptDiv.innerHTML = '<strong>Prompt:</strong> ';
+      const promptSpan = document.createElement('span');
+      promptSpan.textContent = e.prompt;
+      promptDiv.appendChild(promptSpan);
+      const resultDiv = document.createElement('div');
+      resultDiv.innerHTML = '<strong>Result:</strong> ';
+      const resultSpan = document.createElement('span');
+      resultSpan.textContent = truncate(e.result, 160);
+      resultDiv.appendChild(resultSpan);
+      div.appendChild(timeDiv);
+      div.appendChild(promptDiv);
+      div.appendChild(resultDiv);
+      container.appendChild(div);
+    });
+  }
+
+  async function send() {
+    const prompt = document.getElementById('prompt').value.trim();
+    const toolType = document.getElementById('toolType').value;
+    document.getElementById('response').textContent = '加载中...';
+    document.getElementById('error').textContent = '';
+
+    const body = {
+      prompt,
+      toolType,
+      contextHistory: buildContextHistoryForRequest()
+    };
+
+    if (!prompt) { document.getElementById('error').textContent = 'Prompt不能为空'; return; }
+
+    try {
+      const resp = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const json = await resp.json();
+      if (json.success) {
+        const dataPart = Array.isArray(json.data) ? json.data.join('\n') : (json.data || '');
+        document.getElementById('response').textContent = (json.message || '') + '\n' + dataPart;
+        // 将本次成功调用加入 contextHistory
+        if (contextHistory.length >= MAX_HISTORY) { contextHistory.shift(); }
+        contextHistory.push({
+          timestamp: Date.now(),
+            prompt: prompt,
+            result: truncate(json.data || json.message || '', 500)
+        });
+        renderHistory();
+      } else {
+        document.getElementById('response').textContent = json.message || '失败';
+        document.getElementById('error').textContent = json.error || 'unknown error';
+      }
+    } catch (e) {
+      document.getElementById('response').textContent = '请求异常';
+      document.getElementById('error').textContent = e.message;
+    }
+  }
+
+  document.getElementById('sendBtn').addEventListener('click', send);
+</script>
+</body>
+</html>
