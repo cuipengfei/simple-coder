@@ -80,6 +80,14 @@ public class ReadFileTool implements Tool {
             List<String> allLines = Files.readAllLines(filePath);
             int totalLines = allLines.size();
 
+            // Empty file shortcut
+            if (totalLines == 0) {
+                return ToolResponse.success(
+                        String.format("Read %s (empty file: 0 lines)", readRequest.filePath),
+                        ""
+                );
+            }
+
             // Apply line range if specified
             List<String> selectedLines;
             int startLine, endLine;
@@ -184,12 +192,15 @@ public class ReadFileTool implements Tool {
      */
     private String formatWithLineNumbers(List<String> lines, int startLineNumber) {
         int lineNumWidth = String.valueOf(startLineNumber + lines.size() - 1).length();
-        return lines.stream()
-                .map(line -> {
-                    int lineNum = startLineNumber + lines.indexOf(line);
-                    return String.format("%" + lineNumWidth + "d | %s", lineNum, line);
-                })
-                .collect(Collectors.joining("\n"));
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < lines.size(); i++) {
+            int lineNum = startLineNumber + i;
+            sb.append(String.format("%" + lineNumWidth + "d | %s", lineNum, lines.get(i)));
+            if (i < lines.size() - 1) {
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
     }
 
     /**

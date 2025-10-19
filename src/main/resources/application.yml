@@ -2,6 +2,7 @@ simple-coder:
   repo-root: ${user.dir}
   max-file-lines: 500
   max-search-results: 50
+  max-list-results: 200
 
 spring:
   ai:

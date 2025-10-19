@@ -31,9 +31,13 @@ public class ListDirTool implements Tool {
 
     private final PathValidator pathValidator;
 
-    public ListDirTool(PathValidator pathValidator) {
+    private final int maxListResults;
+
+    public ListDirTool(PathValidator pathValidator,
+                       @org.springframework.beans.factory.annotation.Value("${simple-coder.max-list-results}") int maxListResults) {
         this.pathValidator = pathValidator;
-        log.info("ListDirTool initialized");
+        this.maxListResults = maxListResults;
+        log.info("ListDirTool initialized with max-list-results: {}", maxListResults);
     }
 
     @Override
@@ -63,10 +67,17 @@ public class ListDirTool implements Tool {
                 results = listDirectory(basePath, repoRoot);
             }
 
+            boolean truncated = false;
+            if (results.size() > maxListResults) {
+                results = results.subList(0, maxListResults);
+                truncated = true;
+            }
+
             String message = String.format(
-                    "Found %d items matching '%s'",
+                    "Found %d items matching '%s'%s",
                     results.size(),
-                    pattern
+                    pattern,
+                    truncated ? String.format(" [TRUNCATED: first %d items]", maxListResults) : ""
             );
 
             return ToolResponse.success(message, results);

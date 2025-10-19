@@ -72,20 +72,22 @@ public class SearchTool implements Tool {
 
             List<String> results = new ArrayList<>();
             Pattern searchPattern = compilePattern(searchRequest);
-            boolean hasMore = false;
+            boolean truncated = false;
 
             if (Files.isRegularFile(searchPath)) {
-                hasMore = searchInFile(searchPath, searchPattern, repoRoot, results);
+                truncated = searchInFile(searchPath, searchPattern, repoRoot, results);
             } else if (Files.isDirectory(searchPath)) {
-                hasMore = searchInDirectory(searchPath, searchPattern, repoRoot, results);
+                truncated = searchInDirectoryEarlyStop(searchPath, searchPattern, repoRoot, results);
             } else {
                 return ToolResponse.error("Path is neither file nor directory: " + searchRequest.path);
             }
 
-            boolean truncated = hasMore;
             if (results.size() > maxSearchResults) {
+                // Should not exceed, but hard guard
                 results = results.subList(0, maxSearchResults);
                 truncated = true;
+            } else if (truncated) {
+                // truncated already true from early stop
             }
 
             String message = String.format(
@@ -96,7 +98,7 @@ public class SearchTool implements Tool {
             );
 
             if (truncated) {
-                message += String.format(" [TRUNCATED: showing first %d results]", maxSearchResults);
+                message += String.format(" [TRUNCATED: reached limit %d before completing search]", maxSearchResults);
             }
 
             return ToolResponse.success(message, results);
@@ -149,13 +151,20 @@ public class SearchTool implements Tool {
     }
 
     private boolean searchInFile(Path file, Pattern pattern, Path repoRoot, List<String> results) throws IOException {
+        // If global limit already reached before processing this file, treat as truncated context.
+        if (results.size() >= maxSearchResults) {
+            return true;
+        }
         List<String> lines = Files.readAllLines(file);
         String relativePath = repoRoot.relativize(file).toString().replace('\\', '/');
 
         for (int i = 0; i < lines.size(); i++) {
+            if (results.size() >= maxSearchResults) {
+                // We hit the limit before finishing this file -> truncated
+                return true;
+            }
             String line = lines.get(i);
             Matcher matcher = pattern.matcher(line);
-
             if (matcher.find()) {
                 int lineNumber = i + 1;
                 String snippet = line.trim();
@@ -163,33 +172,33 @@ public class SearchTool implements Tool {
                     snippet = snippet.substring(0, 100) + "...";
                 }
                 results.add(String.format("%s:%d:%s", relativePath, lineNumber, snippet));
-
-                // Stop if we've reached max results
-                if (results.size() >= maxSearchResults) {
-                    // Check if there are more lines to search
-                    return i + 1 < lines.size();
-                }
             }
         }
-        return false; // No more results
+        // Finished scanning entire file without hitting limit
+        return false;
     }
 
-    private boolean searchInDirectory(Path dir, Pattern pattern, Path repoRoot, List<String> results) throws IOException {
-        boolean[] hasMore = {false};
+    private boolean searchInDirectoryEarlyStop(Path dir, Pattern pattern, Path repoRoot, List<String> results) throws IOException {
         try (var stream = Files.walk(dir)) {
-            stream.filter(Files::isRegularFile)
-                    .forEach(file -> {
-                        try {
-                            boolean fileHasMore = searchInFile(file, pattern, repoRoot, results);
-                            if (fileHasMore) {
-                                hasMore[0] = true;
-                            }
-                        } catch (IOException e) {
-                            log.debug("Failed to search file: {}", file, e);
-                        }
-                    });
+            for (Path file : (Iterable<Path>) stream.filter(Files::isRegularFile)::iterator) {
+                if (results.size() >= maxSearchResults) {
+                    return true; // already reached before processing next file
+                }
+                boolean fileTruncated = false;
+                try {
+                    fileTruncated = searchInFile(file, pattern, repoRoot, results);
+                } catch (IOException e) {
+                    log.debug("Failed to search file: {}", file, e);
+                }
+                if (fileTruncated) {
+                    return true; // truncated inside file
+                }
+                // If results.size() == maxSearchResults here, we finished this file exactly at the limit.
+                // Do NOT mark truncated yet; next loop iteration will decide if there are remaining files (early stop) or exit cleanly.
+            }
         }
-        return hasMore[0];
+        // Completed full traversal without early stop; reaching exactly the limit after final file is NOT considered truncated.
+        return false;
     }
 
     private static class SearchRequest {

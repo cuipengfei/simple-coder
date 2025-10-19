@@ -8,48 +8,44 @@
 3. Directory structure: controller, service, model, tool
 
 ### Phase 2: Core Models
-- `ToolRequest` - 用户请求（prompt, toolType, contextHistory: List<ContextEntry>）
-  - **无状态设计**: 客户端维护会话历史，每次请求携带完整上下文
-  - `buildContextSummary()`: 将上下文格式化为字符串供 LLM 使用
-- `ToolResponse` - 统一响应（success, message, data, error）
-- `ContextEntry` - 单条上下文条目（timestamp, prompt, result）
+- `ToolRequest` (prompt, toolType, contextHistory) — 无状态：客户端维护历史
+- `ToolResponse` (success, message, data, error)
+- `ContextEntry` (timestamp, prompt, result)
 
-### Phase 3: Tools（按依赖顺序）
-1. `PathValidator` - 路径安全检查
-2. `ReadFileTool` - 读取文件（支持行号范围）
-3. `ListDirTool` - 列出目录/glob
-4. `SearchTool` - 正则/包含搜索
-5. `ReplaceTool` - 精确替换（唯一性验证）
+### Phase 3: Tools (已完成核心)
+1. `PathValidator` — 路径安全检查
+2. `ReadFileTool` — 读取文件（行号范围 + 截断）
+3. `ListDirTool` — 列出目录 / glob（当前缺少结果上限，TODO）
+4. `SearchTool` — 正则/包含搜索（统一截断：达到上限早停；目录完整遍历恰好等于上限不视为截断）
+5. `ReplaceTool` — 精确唯一替换
 
-### Phase 4: Agent Service
-- 单轮交互：解析意图 → 工具路由 → 执行 → 格式化
-- Spring AI 集成（ChatClient，Auto 模式选工具）
+### Phase 4: Agent Service (待实现)
+- 单轮交互：解析 → 工具路由（auto 需 LLM）→ 执行 → 返回
+- Spring AI ChatClient 集成（model + messages + tool selection）
 
-### Phase 5: Minimal UI
-- REST API: `/api/agent`
-- Static HTML + JS: 输入框 + 工具下拉 + 结果区 + 简易历史
+### Phase 5: Minimal UI (待实现)
+- REST API: `/api/agent` (Controller + AgentService)
+- Static HTML/JS: 输入、工具选择、结果、简易历史
 
 ### Phase 6: Testing
-- 单元测试（工具独立验证）
-- 集成测试（Spring Boot Test）
-- 手动测试（连续任务场景）
+- 单元测试（已覆盖各工具与模型）
+- 集成测试（待添加：Controller + AgentService）
+- 端到端（UI 驱动）
 
 ---
-
 ## Tech Design
 
-### Architecture（极简三层）
+### Architecture (三层 + 无状态)
 ```
-Controller (REST)
+Controller (REST, POST /api/agent)
     ↓
-AgentService (单轮逻辑 + Spring AI)
+AgentService (单轮逻辑 + Spring AI ChatClient)
     ↓
-Tools (read/list/search/replace)
+Tools (PathValidator + read/list/search/replace)
 ```
+客户端携带完整上下文；服务端不保存会话。
 
-### Key Components
-
-#### Tool Interface
+### Tool Interface
 ```java
 public interface Tool {
     String getName();
@@ -57,47 +53,30 @@ public interface Tool {
 }
 ```
 
-#### PathValidator（安全核心）
-```java
-public class PathValidator {
-    private final String repoRoot;
-    public void validate(String path) throws SecurityException;
-}
-```
+### PathValidator
+- 输入路径标准化、realPath（存在时）
+- 检查是否以 repoRoot 开头，否则 SecurityException
 
-#### ConversationContext（已移除 - 无状态设计）
-```
-Phase 2 原设计为 session-scoped bean，已改为客户端维护上下文：
-- ToolRequest.contextHistory: List<ContextEntry> 携带历史
-- ToolRequest.buildContextSummary(): 格式化上下文供 LLM 使用
-- 服务端无状态，不存储会话
-```
-
-#### AgentService（核心流程）
+### AgentService (计划)
 ```java
 public ToolResponse process(ToolRequest request) {
-    // 1. 从请求获取客户端维护的上下文
-    // 2. Auto 模式 → LLM 选工具
-    // 3. 路由到 Tool
-    // 4. 执行并格式化
-    // 5. 返回 ToolResponse（客户端负责更新历史）
+    // validate request
+    // if toolType == auto → 调用模型选择工具
+    // route → tool.execute(request)
+    // return ToolResponse
 }
 ```
 
-### Data Flow（单回合示例）
+### Data Flow (示例: 搜索后读取)
 ```
-用户: "搜索 docs/ 中的 Agent"
-  ↓
-Controller → AgentService (Auto) → ChatClient 选 SearchTool
-  ↓ (使用 request.buildContextSummary() 提供上下文)
-SearchTool → PathValidator → Files.walk + Pattern
-  ↓
-返回 List<String> "file:line:snippet" (最多 50 条)
-  ↓
-JSON Response → 客户端更新历史并渲染 UI
+User: "Search 'Agent' in docs"
+Controller → AgentService → SearchTool (PathValidator + Files.walk)
+Result → ToolResponse(JSON)
+User: "Read docs/sources/notes-system-prompts.md:1-20"
+Controller → AgentService → ReadFileTool → 返回前 20 行
 ```
 
-### Configuration（application.yml）
+### Configuration (真实 current application.yml)
 ```yaml
 simple-coder:
   repo-root: ${user.dir}
@@ -108,69 +87,71 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
-      model: gpt-3.5-turbo
-```
+      chat:
+        options:
+          model: gpt-3.5-turbo  # TODO: 更新为实际可用模型
 
-### Dependencies（核心）
-```xml
-<dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-bom</artifactId>
-            <version>1.0.3</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-    </dependencies>
-</dependencyManagement>
-
-<dependencies>
-    <dependency>spring-boot-starter-web</dependency>
-    <dependency>spring-ai-starter-model-openai</dependency>
-    <dependency>lombok</dependency>
-    <dependency>spring-boot-starter-test</dependency>
-</dependencies>
+server:
+  port: 8080
 ```
+注意：旧文档示例使用 `spring.ai.openai.model` 已过时，应使用 `spring.ai.openai.chat.options.model`。
 
-### Minimal UI Structure
-```html
-<textarea id="prompt"></textarea>
-<select id="tool">
-  <option value="auto">Auto</option>
-  <option>read/list/search/replace</option>
-</select>
-<button id="submit">Submit</button>
-<pre id="result"></pre>
-<div id="history"></div>
-```
+### Dependencies (pom.xml 摘要)
+- spring-boot-starter-web
+- spring-ai-starter-model-openai (由 spring-ai-bom 管理版本)
+- lombok
+- spring-boot-starter-test (scope test)
 
 ### Error Handling
-- 路径越界 → 403 "路径超出仓库根"
-- 文件不存在 → 404 "文件未找到"
-- 替换不唯一 → 400 "需唯一匹配"
-- 正则无效 → 400 "正则表达式错误"
-- LLM 失败 → 503 "模型服务不可用"
+- 路径越界 → ToolResponse.error + SecurityException 信息
+- 文件不存在 / 非 regular file → 清晰 message
+- SearchTool：regex 语法错误 → "Invalid regex pattern"
+- ReplaceTool：多次匹配或未匹配 → 安全失败
 
-### Testing Strategy
-1. **单元测试**: PathValidator, 各 Tool 独立验证
-2. **集成测试**: 单轮流程 + 会话上下文
-3. **手动测试**: 连续任务、边界场景
+### Testing (现状)
+- 各工具均有 JUnit5 测试覆盖主要分支与错误场景
+- SearchTool 追加 `testSearchDirectoryExactLimitNoTruncation` 验证截断语义
+- 缺口：ListDirTool 大结果场景（尚无上限逻辑）
+
+### Planned Enhancements
+1. AgentService + Controller
+2. Auto 模式：构造 prompt（含 request.buildContextSummary()）→ 模型返回工具名
+3. ListDirTool 结果上限 + 截断提示键（配置：`simple-coder.max-list-results` 计划）
+4. UI：单页应用，最小控件
+5. 集成测试：Mock ChatClient（或提供假实现）验证 auto 路径分支
+6. 模型名更新（避免不可用 gpt-3.5-turbo）
+
+### Key Design Decisions
+- 无状态服务端，减少持久化复杂度
+- 单工具执行，避免并行/冲突锁设计
+- 截断优先（避免超长响应）
+- ReplaceTool 强制唯一匹配，防止大范围意外替换
+
+### TODO Summary
+- [ ] AgentService + Controller
+- [ ] Auto 工具选择逻辑
+- [ ] ListDirTool 上限与测试
+- [ ] UI + 前端静态文件
+- [ ] 集成测试
+- [ ] 配置与文档同步（模型名 + 新增 max-list-results）
 
 ---
-
-## Key Design Decisions（极简原则）
-
-1. **No Tool Framework** - 简单 `List<Tool>` 注入
-2. **Stateless Server** - 客户端维护会话历史，服务端无 session/Redis/DB
-3. **Synchronous Only** - 单线程，无异步
-4. **Minimal Validation** - 仅路径安全
-5. **Plain HTML/JS** - 无前端框架
-6. **Truncation Over Pagination** - 超限截断 + 提示
+## Reference Mapping
+- PathValidator → security boundary (docs + tests)
+- ReadFileTool → line range + truncation
+- SearchTool → unified truncation semantics
+- ReplaceTool → unique occurrence enforcement
 
 ---
+## Risks
+| 风险 | 现状 | 缓解 |
+|------|------|------|
+| 模型名不可用 | 使用 gpt-3.5-turbo | 启动前替换为供应商当前可用列表项 |
+| list_dir 过长输出 | 无上限 | 添加 max-list-results + 截断提示 |
+| auto 路由缺失 | 未实现 | Phase 4 引入 ChatClient + 工具名称映射 |
+| 集成测试缺失 | 工具单测已覆盖 | 添加 Controller + AgentService 集成用例 |
 
-**参考文档**:
-- `docs/sources/notes-coding-agent.md` § 2.1, § 3.2
-- `docs/syntheses/architecture-patterns.md` § 4
-- `docs/syntheses/code-modification.md` § 2.1
+---
+## Done vs Pending
+- DONE: Models + Tools + 单元测试（含截断语义修复）
+- PENDING: Service, Controller, UI, ListDirTool 限制, 集成测试, 模型名更新

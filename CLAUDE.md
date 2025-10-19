@@ -42,15 +42,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **无并行/规划/记忆**: 参考 docs/syntheses/architecture-patterns.md § 4（Source 2/3 无并行）
 - **安全**: 文件操作限仓库根；无密钥暴露；网络仅模型 API
 
-## 项目状态
+## 项目状态（已更新）
 
 - **已完成**: Phase 1 (项目脚手架) + Phase 2 (核心 Models - 无状态设计)
-- **当前阶段**: 准备 Phase 3 (Tools 实现)
+- **当前阶段**: Phase 3 工具层已完成（准备进入 Phase 4 AgentService / Controller）
 - **架构现状**:
   - ✅ Spring Boot 3.5.6 + Spring AI 1.0.3 集成
   - ✅ ToolRequest/ToolResponse/ContextEntry 模型（无状态架构）
   - ✅ 客户端维护上下文，服务端无会话存储
-  - ⏳ Tool 接口和实现（待实现）
+  - ✅ Tool 接口与核心工具（PathValidator / ReadFileTool / ListDirTool / SearchTool / ReplaceTool）实现并测试
   - ⏳ AgentService 和 Controller（待实现）
 
 ## 核心架构（参考 docs/IMPLEMENTATION.md）
@@ -89,9 +89,9 @@ Tools (PathValidator + read/list/search/replace)
   - `result`: 系统响应
   - `getSummary()`: 格式化摘要（截断长文本）
 
-### 待实现组件（Phase 3-5）
+### 组件阶段状态（Phase 1-5）
 
-#### 3. Tool 层 (com.simplecoder.tool) - Phase 3
+#### 3. Tool 层 (com.simplecoder.tool) - Phase 3 已完成
 ```java
 // Tool 接口
 public interface Tool {
@@ -147,7 +147,7 @@ public ToolResponse process(ToolRequest request) {
 - **工具选择**: Auto 模式下由 LLM 选择合适的 Tool
 - **依赖**: 使用 `spring-ai-bom` 管理版本，实际依赖 `spring-ai-starter-model-openai`
 
-## 开发命令
+## 开发命令与运行示例（更新）
 
 ### 构建与测试
 ```bash
@@ -168,7 +168,7 @@ mvn spring-boot:run
 mvn clean package
 ```
 
-### 测试策略（按 Phase）
+### 测试策略（按 Phase + 工具细化）
 - **Phase 2**: Model 类测试（ToolRequest, ToolResponse, ContextEntry）
 - **Phase 3**: Tool 单元测试（每个 Tool 独立验证）
 - **Phase 4**: AgentService 集成测试
@@ -183,7 +183,7 @@ set OPENAI_API_KEY=sk-xxx
 export OPENAI_API_KEY=sk-xxx
 ```
 
-## 实践准则
+## 补充：工具行为语义与实践准则（更新）
 
 - **闭环优先**: 能运行 > 优雅；参考 docs/syntheses/architecture-patterns.md § 8.3（快速原型场景）
 - **依赖最小化**: 仅用已声明依赖；新增写入配置

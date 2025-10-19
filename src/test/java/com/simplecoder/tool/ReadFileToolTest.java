@@ -211,7 +211,7 @@ class ReadFileToolTest {
         ToolResponse response = tool.execute(request);
 
         assertTrue(response.isSuccess());
-        assertTrue(response.getMessage().contains("lines 1-0 of 0 total"));
+        assertTrue(response.getMessage().contains("empty file: 0 lines"));
     }
 
     @Test
@@ -287,5 +287,22 @@ class ReadFileToolTest {
 
         assertTrue(response.isSuccess());
         assertTrue(response.getMessage().contains("lines 2-4"));
+    }
+
+    @Test
+    void testReadDuplicateLinesLineNumbersUnique() throws IOException {
+        Path testFile = tempDir.resolve("dups.txt");
+        Files.writeString(testFile, "same\nsame\nsame");
+
+        ToolRequest request = ToolRequest.builder()
+                .prompt("Read dups.txt")
+                .build();
+
+        ToolResponse response = tool.execute(request);
+        assertTrue(response.isSuccess());
+        String data = (String) response.getData();
+        assertTrue(data.contains("1 | same"));
+        assertTrue(data.contains("2 | same"));
+        assertTrue(data.contains("3 | same"));
     }
 }
