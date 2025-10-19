@@ -8,9 +8,11 @@
 3. Directory structure: controller, service, model, tool
 
 ### Phase 2: Core Models
-- `ToolRequest` - 用户请求（prompt, toolType, contextHistory）
+- `ToolRequest` - 用户请求（prompt, toolType, contextHistory: List<ContextEntry>）
+  - **无状态设计**: 客户端维护会话历史，每次请求携带完整上下文
+  - `buildContextSummary()`: 将上下文格式化为字符串供 LLM 使用
 - `ToolResponse` - 统一响应（success, message, data, error）
-- `ConversationContext` - 会话期上下文（session-scoped bean）
+- `ContextEntry` - 单条上下文条目（timestamp, prompt, result）
 
 ### Phase 3: Tools（按依赖顺序）
 1. `PathValidator` - 路径安全检查
@@ -63,25 +65,22 @@ public class PathValidator {
 }
 ```
 
-#### ConversationContext（会话期）
-```java
-@Component
-@Scope(value = SCOPE_SESSION, proxyMode = TARGET_CLASS)
-public class ConversationContext {
-    private final Deque<ContextEntry> history = new LinkedList<>();
-    public void addEntry(String prompt, String result);
-    public String getContextSummary(); // 最近 10 条
-}
+#### ConversationContext（已移除 - 无状态设计）
+```
+Phase 2 原设计为 session-scoped bean，已改为客户端维护上下文：
+- ToolRequest.contextHistory: List<ContextEntry> 携带历史
+- ToolRequest.buildContextSummary(): 格式化上下文供 LLM 使用
+- 服务端无状态，不存储会话
 ```
 
 #### AgentService（核心流程）
 ```java
 public ToolResponse process(ToolRequest request) {
-    // 1. Auto 模式 → LLM 选工具
-    // 2. 路由到 Tool
-    // 3. 执行并格式化
-    // 4. 更新 context
-    // 5. 返回 ToolResponse
+    // 1. 从请求获取客户端维护的上下文
+    // 2. Auto 模式 → LLM 选工具
+    // 3. 路由到 Tool
+    // 4. 执行并格式化
+    // 5. 返回 ToolResponse（客户端负责更新历史）
 }
 ```
 
@@ -90,14 +89,12 @@ public ToolResponse process(ToolRequest request) {
 用户: "搜索 docs/ 中的 Agent"
   ↓
 Controller → AgentService (Auto) → ChatClient 选 SearchTool
-  ↓
+  ↓ (使用 request.buildContextSummary() 提供上下文)
 SearchTool → PathValidator → Files.walk + Pattern
   ↓
 返回 List<String> "file:line:snippet" (最多 50 条)
   ↓
-ConversationContext.addEntry(...)
-  ↓
-JSON Response → UI 渲染
+JSON Response → 客户端更新历史并渲染 UI
 ```
 
 ### Configuration（application.yml）
@@ -106,7 +103,6 @@ simple-coder:
   repo-root: ${user.dir}
   max-file-lines: 500
   max-search-results: 50
-  context-history-size: 10
 
 spring:
   ai:
@@ -117,9 +113,21 @@ spring:
 
 ### Dependencies（核心）
 ```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-bom</artifactId>
+            <version>1.0.3</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+
 <dependencies>
     <dependency>spring-boot-starter-web</dependency>
-    <dependency>spring-ai-openai-spring-boot-starter</dependency>
+    <dependency>spring-ai-starter-model-openai</dependency>
     <dependency>lombok</dependency>
     <dependency>spring-boot-starter-test</dependency>
 </dependencies>
@@ -154,7 +162,7 @@ spring:
 ## Key Design Decisions（极简原则）
 
 1. **No Tool Framework** - 简单 `List<Tool>` 注入
-2. **Session-Scoped Context** - Spring Session Bean（无 Redis/DB）
+2. **Stateless Server** - 客户端维护会话历史，服务端无 session/Redis/DB
 3. **Synchronous Only** - 单线程，无异步
 4. **Minimal Validation** - 仅路径安全
 5. **Plain HTML/JS** - 无前端框架
