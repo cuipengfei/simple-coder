@@ -25,11 +25,11 @@
 - references/glossary.md
 - references/citations.md
 
-后续占位（条件触发）
+后续占位（可启动）
+- interactive-modes.md（UI 原型已完成，待撰写交互模式总结：最小 UI、客户端上下文、截断文案与结果呈现）
 - validation-error-handling.md（工具执行后验证策略；待集成测试完成）
 - tool-systems.md（工具抽象进一步扩展后，如新增并行或多步）
-- task-planning-memory.md（引入会话期上下文与更多规划逻辑后，可能并入 open-questions）
-- interactive-modes.md（UI 原型完成后总结交互模式）
+- task-planning-memory.md（若引入更丰富的会话期上下文与规划逻辑，可并入 open-questions 或单列）
 
 里程碑
 - M1：完成三份 notes（R1–R2）。

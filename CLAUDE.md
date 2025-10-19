@@ -19,73 +19,94 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Client → POST /api/agent (ToolRequest JSON)
     Controller (AgentController)
         → AgentService.process()
-            → (toolType=auto?) ModelToolSelectionStrategy (ChatClient 选择工具)
-            → Tool 实例执行 (read | list | search | replace)
+            → ChatClient.tools(toolsService) (Spring AI 自动选择工具并提取参数)
+            → ToolsService @Tool 方法执行 (readFile | listFiles | searchText | replaceText)
                 → PathValidator 路径安全
                 → 文件 / 目录 / 文本操作
-返回 ToolResponse JSON （含前缀、可选 data）
+返回 ToolResponse JSON （可选 data）
 ```
 特性：
 - 无状态：ToolRequest.contextHistory 携带全部历史；服务端不落地。
 - 单工具：每个请求仅一次工具调用。
+- 自然语言：用户发送自然语言 prompt，模型自动选择工具并提取参数。
 
 ## 核心组件
 ### Model 层 (com.simplecoder.model)
-- ToolRequest：prompt、toolType（显式或"auto"）、contextHistory；方法：validate()、buildContextSummary()。
+- ToolRequest：prompt、toolType（现已废弃，保留兼容性）、contextHistory；方法：validate()、buildContextSummary()。
 - ToolResponse：success、message、data、error；静态工厂：success(...) / error(...)。
 - ContextEntry：timestamp、prompt、result、getSummary()（用于上下文压缩）。
 
-### Tool 抽象 (com.simplecoder.tool)
+### ToolsService (com.simplecoder.service.ToolsService)
+统一服务包含四个 @Tool 注解方法，Spring AI ChatClient 自动调用：
+
+```java
+@Tool(description = "Read file contents, optionally with line range")
+public String readFile(
+    @ToolParam(description = "File path relative to repository root") String filePath,
+    @ToolParam(description = "Starting line number (optional)", required = false) Integer startLine,
+    @ToolParam(description = "Ending line number (optional)", required = false) Integer endLine)
+
+@Tool(description = "List directory contents or files matching glob pattern")
+public String listFiles(
+    @ToolParam(description = "Directory path or glob pattern") String path)
+
+@Tool(description = "Search for text pattern (literal or regex) in files")
+public String searchText(
+    @ToolParam(description = "Text pattern to search for") String pattern,
+    @ToolParam(description = "Directory or file path to search in") String searchPath,
+    @ToolParam(description = "Whether pattern is regex", required = false) Boolean isRegex,
+    @ToolParam(description = "Whether search is case-sensitive", required = false) Boolean caseSensitive)
+
+@Tool(description = "Replace exact string in a file")
+public String replaceText(
+    @ToolParam(description = "File path relative to repository root") String filePath,
+    @ToolParam(description = "Old string to replace") String oldString,
+    @ToolParam(description = "New string to replace with") String newString)
 ```
-public interface Tool {
-  String getName();
-  ToolResponse execute(ToolRequest request);
-}
-```
-实现：read / list / search / replace（getName() 与协议名一致）。
+
 辅助：PathValidator 限制所有路径在仓库根。
 
 ### AgentService (com.simplecoder.service.AgentService)
-路由流程：
-1. 空或空白 toolType 归一化为 "auto"。
-2. 若为 auto：调用 toolSelectionStrategy.selectTool(request) 获取具体工具名。
-3. 先按 Map key 直接查找（Spring 注入可能是 bean 名）。
-4. 若为空：fallback 遍历 values，比较 Tool.getName()（忽略大小写），解决 bean 名 ≠ 协议名（如 bean "readFileTool"）。
-5. 执行工具；若返回 message 非空，前缀 `[tool=<selected>]`。
-6. 捕获异常统一返回 ToolResponse.error("AgentService error", e.getMessage())。
-错误类型：未知工具 / 工具执行异常 / 策略选择异常。
-
-### 工具选择策略 (ModelToolSelectionStrategy)
-ChatClient fluent 调用：
+处理流程（已大幅简化）：
+1. 验证 ToolRequest。
+2. 构建上下文摘要（如有）。
+3. 调用 ChatClient：
+```java
+String result = chatClient.prompt()
+    .user(promptBuilder.toString())
+    .tools(toolsService)  // 注册所有 @Tool 方法
+    .call()
+    .content();
 ```
-String raw = chatClient.prompt()
-  .system(s -> s.text(systemInstruction))
-  .user(u -> u.text(userInstruction))
-  .call()
-  .content();
-```
-System 指令强约束输出：只能一个 token（read | list | search | replace）。
-Normalization：trim → lowercase → 去首尾引号/反引号 → 若包含空格取首 token。
-非法 token 抛 IllegalArgumentException，外层由 AgentService 捕获转错误响应。
+4. Spring AI 自动：选择工具 → 提取参数 → 调用方法 → 返回结果。
+5. 捕获异常统一返回 ToolResponse.error("AgentService error", e.getMessage())。
 ## 工具语义与资源限制
 - read：读取文件（可选行范围）；超出最大行数 → `[TRUNCATED: showing first N lines, M more available]`；空文件 → `empty file: 0 lines`。
 - list：列出目录或 glob；超过最大数量 → `[TRUNCATED: first N items]`。
 - search：正则或子串搜索；若在遍历未完成前达到结果上限 → `[TRUNCATED: reached limit N before completing search]`。
 - replace：精确唯一替换；old_string 未找到或出现次数≠1 → 失败。唯一性按非重叠出现统计（示例：内容 "aaa" + old_string "aa" 视为 1 次）。
 
-## 错误处理与前缀
-- 成功：统一在返回 message 前添加 `[tool=<name>]` 便于追踪。
-- 失败路径：未知工具 / 模型选择异常 / 工具运行异常 → `ToolResponse.error(message, detail)`。
-- `AgentService error` 为统一包装层；`Unknown tool: <name>` 表示未能路由。
+## 错误处理
+- 失败路径：模型选择异常 / 工具运行异常 → `ToolResponse.error(message, detail)`。
+- `AgentService error` 为统一包装层。
+- 工具内部错误（路径越界、文件不存在等）由工具方法返回 "Error: ..." 前缀字符串。
 
 ## 接口示例
 POST /api/agent
 Content-Type: application/json
-请求示例：
+请求示例（自然语言）：
+```
+{
+  "prompt": "search for any java file",
+  "toolType": "auto",
+  "contextHistory": []
+}
+```
+或结构化格式（兼容）：
 ```
 {
   "prompt": "Read src/main/java/com/simplecoder/service/AgentService.java lines 1-40",
-  "toolType": "read",
+  "toolType": "auto",
   "contextHistory": []
 }
 ```
@@ -93,15 +114,16 @@ Content-Type: application/json
 ```
 {
   "success": true,
-  "message": "[tool=read] Read ... (lines 1-40 of X total)",
-  "data": "<truncated or full content>",
+  "message": "Tool execution result",
+  "data": "Read ... (lines 1-40 of X total)\n\n<file content>",
   "error": null
 }
 ```
 
 ## 测试覆盖概览
-- 已覆盖：Model 类、各 Tool、AgentService（显式/auto/fallback/异常）、AgentController。
-- 暂未覆盖：多步连续交互场景；replace 重叠匹配 edge case（目前接受现状）。
+- 已覆盖：Model 类、AgentController。
+- 未覆盖：ToolsService 工具方法单测、端到端集成测试（ChatClient + 实际模型调用）。
+- 暂不处理：replace 重叠匹配 edge case、多步连续交互场景。
 
 ## 常用 Maven 命令
 ```bash
@@ -141,9 +163,9 @@ export OPENAI_API_KEY=sk-xxx
 - 不做大规模重构，除非为修复正确性。
 
 ## 后续扩展指引
-- 新增 Tool：保持名称为单一小写 token；同步更新模型系统指令枚举。
-- 保持成功消息前缀格式 `[tool=<name>]`。
-- 若 bean 名与协议名分离，确保 fallback 逻辑仍适用。
+- 新增工具：在 ToolsService 中添加 @Tool 注解方法，Spring AI 会自动识别。
+- 工具描述需清晰，便于模型选择。
+- 参数描述需详细，便于模型从自然语言提取。
 - 避免引入不必要依赖（mockito-core 已由 spring-boot-starter-test 覆盖基础需求）。
 
 ## 已知但暂不处理的 Edge Cases

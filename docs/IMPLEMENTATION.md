@@ -12,74 +12,87 @@
 - `ToolResponse` (success, message, data, error)
 - `ContextEntry` (timestamp, prompt, result)
 
-### Phase 3: Tools (已完成核心)
+### Phase 3: Tools（已完成核心）
 1. `PathValidator` — 路径安全检查
-2. `ReadFileTool` — 读取文件（行号范围 + 截断）
-3. `ListDirTool` — 列出目录 / glob（已实现结果上限 `max-list-results` + 截断提示 `[TRUNCATED: first N items]`）
-4. `SearchTool` — 正则/包含搜索（统一截断：达到上限早停；目录完整遍历恰好等于上限不视为截断；截断消息示例 `[TRUNCATED: reached limit 50 before completing search]`）
-5. `ReplaceTool` — 精确唯一替换（old != new；唯一出现）
+2. `ToolsService` — 统一服务包含四个 @Tool 方法：
+   - `readFile` — 读取文件（行号范围 + 截断）
+   - `listFiles` — 列出目录 / glob（结果上限 `max-list-results` + 截断提示）
+   - `searchText` — 正则/包含搜索（统一截断语义）
+   - `replaceText` — 精确唯一替换（old != new；唯一出现）
 
-### Phase 4: Agent Service & Controller (已完成，缺集成测试)
-- 单轮交互：解析 → 工具路由（含 auto 模式）→ 执行 → 返回
-- 已集成 Spring AI `ChatClient` 进行工具选择（`ModelToolSelectionStrategy`）
-- Fallback：若模型返回名称不在映射，用工具 `getName()` 进行匹配
-- 错误路径：未知工具 / 空工具名 / 执行异常 → 返回安全失败的 `ToolResponse`
-- 响应 message 前缀 `[tool=<name>]` 便于追踪（前端需剥离展示可选）
+### Phase 4: Agent Service & Controller（已完成，缺集成测试）
+- 单轮交互：拼接上下文摘要 + 用户请求 → Spring AI 原生工具选择与参数提取 → 执行 → 返回
+- 集成 Spring AI `ChatClient` 以使用 @Tool 注解自动调用
+- 自然语言支持：用户直接描述需求；模型自动识别工具并提取参数
+- 错误路径：执行异常 → 返回安全失败的 `ToolResponse`
+- 重要说明：当前后端忽略 `ToolRequest.toolType`，工具选择完全由模型决定；UI 下拉仅作提示
 
-### Phase 5: Minimal UI (待实现)
-- REST API: `/api/agent` (已存在 Controller + AgentService)
-- Static HTML/JS: 输入、工具选择（含 auto）、结果展示、简易上下文历史（客户端维护）
+### Phase 5: Minimal UI（已实现）
+- REST API: `/api/agent` (Controller + AgentService)
+- Static HTML: `src/main/resources/static/index.html`
+  - 输入、工具选择（默认 auto）、结果展示
+  - 客户端维护上下文历史（最近 20 条），随请求发送至后端
 
-### Phase 6: Testing
-- 单元测试：工具、模型、`AgentService`、`AgentController` 覆盖核心逻辑
-- SearchTool：含 `testSearchDirectoryExactLimitNoTruncation` 验证“恰好等于上限不视为截断”语义
-- 缺口：ListDirTool 截断场景（需模拟大结果）、集成测试（端到端：Controller + ChatClient + 工具执行）、UI 测试（UI 实现后）
+### Phase 6: Testing（现状）
+- 单元测试：Model 类、`AgentController` 已覆盖
+- 缺口：`ToolsService` 工具方法单测、端到端集成测试（Controller + ChatClient + 实际模型调用）、UI 测试
 
 ---
 ## Tech Design
 
-### Architecture (三层 + 无状态)
+### Architecture（三层 + 无状态）
 ```
 Controller (REST, POST /api/agent)
     ↓
-AgentService (单轮逻辑 + Spring AI ChatClient 工具选择)
+AgentService（单轮逻辑 + Spring AI ChatClient 原生工具调用）
     ↓
-Tools (PathValidator + read/list/search/replace)
+ToolsService (@Tool 注解方法 + PathValidator)
 ```
 客户端携带完整上下文；服务端不保存会话。
 
-### Tool Interface
-```java
-public interface Tool {
-    String getName();
-    ToolResponse execute(ToolRequest request);
-}
-```
+### ToolsService 行为与截断语义
+- readFile
+  - 行号范围：startLine / endLine（可选）
+  - 超出 `max-file-lines` → 截断并提示：`[TRUNCATED: showing first N lines, M more available]`
+- listFiles（目录或 glob）
+  - 返回“文件与目录”，排序后输出
+  - 结果数 > `max-list-results` → 截断并提示：`[TRUNCATED: first N items]`
+- searchText
+  - 输出 `file:line:snippet`，snippet 最多 100 字符
+  - 达到 `max-search-results` 早停 → 截断提示：`[TRUNCATED: reached limit N before completing search]`
+  - 若恰等于上限且遍历完成，不标记截断
+- replaceText
+  - 安全约束：old != new；old 在文件中恰好出现一次；路径在 repo-root 内；文件存在且为 regular file
+  - 输出成功摘要（不返回 diff）
 
 ### PathValidator
-- 输入路径标准化、realPath（存在时）
-- 检查是否以 repoRoot 开头，否则 SecurityException
+- 规范化输入路径，存在时转 realPath
+- 验证必须以 repoRoot 开头，否则抛 SecurityException
 
-### AgentService (已实现)
+### AgentService（已实现）
 ```java
 public ToolResponse process(ToolRequest request) {
-    // validate request
-    // if toolType == "auto" → ChatClient 分类出工具名
-    // fallback 处理：模型返回名不在映射则遍历工具比对 getName()
-    // 执行工具 → 返回 ToolResponse (message 前缀 [tool=name])
+    request.validate();
+    String contextSummary = request.buildContextSummary();
+
+    StringBuilder promptBuilder = new StringBuilder();
+    if (contextSummary != null && !contextSummary.isBlank()) {
+        promptBuilder.append("Context History:\n").append(contextSummary).append("\n\n");
+    }
+    promptBuilder.append("User Request:\n").append(request.getPrompt());
+
+    String result = chatClient.prompt()
+        .user(promptBuilder.toString())
+        .tools(toolsService)
+        .call()
+        .content();
+
+    return ToolResponse.success("Tool execution result", result);
 }
 ```
+Spring AI 自动完成：工具选择 → 参数提取 → 方法调用。
 
-### Data Flow (示例: 搜索后读取)
-```
-User: "Search 'Agent' in docs/sources"
-Controller → AgentService → SearchTool (PathValidator + Files.walk)
-Result → ToolResponse(JSON)
-User: "Read docs/sources/notes-system-prompts.md:1-20"
-Controller → AgentService → ReadFileTool → 返回前 20 行
-```
-
-### Configuration (当前 application.yml 摘要)
+### Configuration（当前 application.yml 摘要）
 ```yaml
 simple-coder:
   repo-root: ${user.dir}
@@ -90,7 +103,8 @@ simple-coder:
 spring:
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
+      api-key: dummy-local
+      base-url: http://localhost:4141
       chat:
         options:
           model: gpt-4.1
@@ -98,78 +112,42 @@ spring:
 server:
   port: 8080
 ```
-已更新为当前使用的 `gpt-4.1` 模型。
+风险与排障：当前使用 dummy-local 与 base-url http://localhost:4141（无 /v1）；若未配置可用的 OpenAI 兼容代理/服务，原生 tool-calling（Auto 模式）将不可用。
 
-### Dependencies (pom.xml 摘要)
+### Dependencies（pom.xml 摘要）
 - spring-boot-starter-web
-- spring-ai-starter-model-openai (由 spring-ai-bom 管理版本)
+- spring-ai-starter-model-openai（由 spring-ai-bom 管理版本）
 - lombok
-- spring-boot-starter-test (scope test)
+- spring-boot-starter-test（scope test）
 
-### Error Handling
-- 路径越界 → ToolResponse.error + SecurityException 信息
-- 文件不存在 / 非 regular file → 清晰 message
-- SearchTool：regex 语法错误 → "Invalid regex pattern"
-- ReplaceTool：多次匹配或未匹配 → 安全失败
-- AgentService：未知工具名 / auto 返回空 / 映射失败 → 安全失败
-- ListDirTool：不存在目录 / glob 基路径越界 / 输入指向文件 → 错误
+### Known Issues / TODO
+- ToolsService 缺单元测试（覆盖截断、边界条件、错误处理）
+- 端到端集成测试缺失（Controller + ChatClient + 实际模型）
+- 截断提示文案需在 UI 与文档中统一示例
+- 当历史为空时，AgentService 仍可能注入默认摘要（如 “No previous context.”）；建议后续仅在存在历史时注入
 
-### ListDirTool Glob 安全策略
-- 先从模式中提取基路径 → PathValidator 校验 → Files.walk + PathMatcher 匹配 → 结果排序 → 应用上限与截断提示
-
-### Testing (现状)
-- 工具测试覆盖主要分支与错误场景
-- SearchTool 含“exact limit no truncation”分支测试
-- 缺口：ListDirTool 截断、端到端集成（auto + fallback）、UI 交互
-
-### Planned Enhancements
-1. ListDirTool 截断行为单测（验证 `[TRUNCATED: first N items]` 格式）
-2. 集成测试：模拟 ChatClient + Controller 端到端 (auto/fallback)
-3. Minimal UI 单页（静态资源）
-4. 文档示例同步：截断消息格式统一展示
-5. ReplaceTool 未来评估：重叠子串唯一匹配风险（真实误用出现时）
-6. 会话期上下文前端实现（有限历史 N 条）
-
-### Key Design Decisions
-- 无状态服务端，减少持久化复杂度
+### Key Decisions
+- 无状态服务端，降低持久化复杂度
 - 单工具执行，避免并行/锁复杂度
 - 截断优先（避免超长响应）
-- ReplaceTool 强制唯一匹配，防止大范围意外替换
-- auto 工具选择最小实现：无额外提示工程，仅名称分类
-- 响应消息前缀 `[tool=name]` 供调试与 UI 分离显示
-
-### TODO Summary
-- [x] AgentService + Controller
-- [x] Auto 工具选择逻辑 + fallback
-- [x] ListDirTool 上限实现
-- [ ] ListDirTool 截断单测
-- [ ] UI + 前端静态文件
-- [ ] 集成测试（Controller + ChatClient + 工具）
-- [ ] 截断消息示例统一到文档与 UI 提示
-- [ ] ReplaceTool 重叠匹配风险评估（仅在触发时）
-- [ ] 会话期上下文 UI 实现
+- replaceText 强制唯一匹配，防止大范围意外替换
+- 采用 Spring AI 原生 tool-calling（@Tool 注解），简化实现并支持自然语言输入
 
 ---
 ## Reference Mapping
-- PathValidator → security boundary (docs + tests)
-- ReadFileTool → line range + truncation
-- SearchTool → unified truncation semantics
-- ListDirTool → max-list-results + glob 安全策略 + 截断提示
-- ReplaceTool → unique occurrence enforcement
-- AgentService → auto routing + fallback + message 前缀
-- AgentController → REST entrypoint
+- PathValidator → 安全边界
+- ToolsService.readFile → 行范围 + 截断
+- ToolsService.searchText → 统一截断语义
+- ToolsService.listFiles → 上限 + glob 安全策略 + 截断提示
+- ToolsService.replaceText → 唯一匹配约束
+- AgentService → 原生工具调用
+- AgentController → REST 入口
 
 ---
 ## Risks
 | 风险 | 现状 | 缓解 |
 |------|------|------|
-| 集成测试缺失 | 仅单元测试 | 添加 Controller + ChatClient 集成用例 |
-| ListDir 截断未测试 | 逻辑已实现 | 编写大目录截断单测 |
-| ReplaceTool 重叠匹配场景 | 理论风险 | 保持唯一匹配约束；出现误用再加检测 |
-| UI 缺失 | 仅后端接口 | 最小单页实现 + 手动验证 |
-| 上下文未实现 | 规划中 | 前端维护有限历史 N 条 |
-
----
-## Done vs Pending
-- DONE: Models, Tools, AgentService, AgentController, SearchTool 截断语义测试, ListDirTool 上限逻辑, 模型名更新
-- PENDING: ListDirTool 截断测试, 集成测试, UI, 截断消息示例统一, ReplaceTool 重叠风险评估, 会话上下文 UI
+| 集成测试缺失 | 仅单元测试 | 补端到端集成测试 |
+| ToolsService 单测缺失 | 无工具方法单测 | 增补正反用例 |
+| replaceText 重叠匹配 | 理论风险 | 保持唯一匹配约束；出现误用时再加检测 |
+| 代理/模型依赖 | dummy-local + 本地代理占位 | 提供显式“工具直连模式”作为未来降级 |
