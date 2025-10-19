@@ -1,8 +1,9 @@
 # GEMINI.md
 
 角色与流程
-- Gemini：规划/评审（Plan/Review）；Claude Code：实现/测试（Implement/Test）。
+- Gemini：规划/评审（仅关注架构契合与实质问题）；Claude Code：实现/测试（产出最小可行代码）。
 - 流程：plan → code → review → iterate。
+- 教育场景：示例非生产，禁止过度设计/吹毛求疵；不做风格与微优化争论；以最少依赖快速闭环。
 
 教育用途声明（Educational Scope）
 - 本仓库为“教学用最小 Coding Agent”示例，不是生产系统；评审侧重：功能正确性、与文档规格一致性、最小安全（路径越界、防误替换）。
@@ -13,13 +14,13 @@
 事实基线（当前仓库）
 - 技术栈：Java 21，Spring Boot 3.5.6，Spring AI 1.0.3（spring-ai-bom），依赖 spring-ai-starter-model-openai。
 - 架构：无状态服务端；客户端在 ToolRequest.contextHistory 携带上下文；无 ConversationContext。
-- 已有代码：SimpleCoderApplication；Models（ContextEntry / ToolRequest / ToolResponse）及单测；Tools（PathValidator / ListDirTool / ReadFileTool / SearchTool / ReplaceTool）及单测；application.yml。
-- 待实现：AgentService（auto 工具选择 + LLM 调用）、Controller（REST /api/agent）、最小 UI（单页 HTML/JS）、集成测试（端到端）。
+- 已有代码：SimpleCoderApplication；Models（ContextEntry / ToolRequest / ToolResponse）及单测；Tools（PathValidator / ListDirTool / ReadFileTool / SearchTool / ReplaceTool）及单测；AgentService（auto 工具选择 + LLM 调用）与 Controller（REST /api/agent）已实现；application.yml。
+- 待实现：最小 UI（单页 HTML/JS）、端到端集成测试（E2E）。
 
 当前开放问题（需后续处理）
-1. ListDirTool 缺少结果数量上限与截断提示；FEATURES.md 规格声明“上限提示”，实现不符，可能在大目录下输出过长。
-2. application.yml 使用模型 gpt-3.5-turbo（可能不可用），需替换为当前实际可用模型名（运行前确认供应商可用列表）。
-3. 文档与配置示例不一致：IMPLEMENTATION.md 中 application.yml 示例使用旧键 `spring.ai.openai.model`，实际配置使用 `spring.ai.openai.chat.options.model`；保持统一避免误导。
+1. （暂无阻塞性开放问题）
+
+备注：使用模型名 gpt-4.1 已在配置中设定，视为当前教学场景下有效，无需再次评审；文档保持与 application.yml 一致键 `spring.ai.openai.chat.options.model`。
 
 已解决问题（保留追溯，不再列为开放问题）
 - SearchTool 截断语义不一致：已统一行为（单文件达到上限→截断；目录完整遍历恰好达到上限→不截断），测试 `testSearchDirectoryExactLimitNoTruncation` 验证。

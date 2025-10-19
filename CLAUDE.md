@@ -4,9 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 角色与协作
 
-- **Claude Code**: 编码者（执行、实现、测试）
-- **Gemini**: 规划者/评审者（架构设计、方案审查）
+- **Claude Code**: 编码者（实现与测试，始终产出最小可行代码）
+- **Gemini**: 规划/评审（仅聚焦实质问题与规范一致性）
 - **协作模式**: Gemini 规划 → Claude 编码 → Gemini 评审 → 迭代
+- **教育场景**: 示例性质，非生产；禁止过度设计与吹毛求疵
+- **评审准则**: 只报真实功能/安全/规范差错；避免风格、微性能、抽象层次争论
+- **代码期望**: 简洁、闭环、最少依赖；能运行即止
 
 ## 技术栈（V0）
 
@@ -51,7 +54,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - ✅ ToolRequest/ToolResponse/ContextEntry 模型（无状态架构）
   - ✅ 客户端维护上下文，服务端无会话存储
   - ✅ Tool 接口与核心工具（PathValidator / ReadFileTool / ListDirTool / SearchTool / ReplaceTool）实现并测试
-  - ⏳ AgentService 和 Controller（待实现）
+  - ✅ AgentService 和 Controller 已实现（单轮处理 + REST /api/agent）
 
 ## 核心架构（参考 docs/IMPLEMENTATION.md）
 
@@ -124,6 +127,14 @@ public ToolResponse process(ToolRequest request) {
 - 接收 `ToolRequest`，返回 `ToolResponse`
 
 ## 关键设计约束
+
+### 统一资源限制与截断语义（最新）
+- ReadFileTool: `max-file-lines` 超过限制 → 截断并附 `[TRUNCATED: showing first N lines, M more available]`；空文件输出 `empty file: 0 lines`
+- SearchTool: `max-search-results` 达到前提前停止（未完成遍历）才标记截断 → `[TRUNCATED: reached limit N before completing search]`；若恰好在最后一文件/最后一行达到 N 不截断
+- ListDirTool: `max-list-results` 超过限制保留前 N 项 → `[TRUNCATED: first N items]`
+- ReplaceTool: 强制 `old_string` 唯一出现（否则报错），保障确定性与安全
+
+
 
 ### 单轮交互模式
 - **硬性单工具**: 每次请求仅执行一个 Tool
