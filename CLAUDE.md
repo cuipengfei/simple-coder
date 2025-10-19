@@ -42,13 +42,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **无并行/规划/记忆**: 参考 docs/syntheses/architecture-patterns.md § 4（Source 2/3 无并行）
 - **安全**: 文件操作限仓库根；无密钥暴露；网络仅模型 API
 
+## 项目状态
+
+- **当前**: Docs-only（无代码）
+- **待实现**: 参考 `docs/IMPLEMENTATION.md` 和 `docs/PRD.md`
+
+## 核心架构（参考 docs/IMPLEMENTATION.md）
+
+```
+Controller (REST: /api/agent)
+    ↓
+AgentService (单轮逻辑 + Spring AI ChatClient)
+    ↓
+Tools (PathValidator + read/list/search/replace)
+    ↓
+ConversationContext (Session-scoped bean)
+```
+
+**关键约束**:
+- **硬性单工具**: 每次请求仅执行一个 Tool；多步意图 → 返回提示
+- **会话期上下文**: Session-scoped `ConversationContext`（无 Redis/DB）
+- **路径安全**: `PathValidator` 限制仓库根内操作
+- **唯一匹配**: `ReplaceTool` 强制 old_string 唯一
+
 ## 开发工作流
 
-1. **探测构建命令**（从 pom.xml/build.gradle 提取）→ 同步到 README.md
-2. **脚手架**: 最小 Spring Boot + Spring AI（1 Controller + 1 Service）
-3. **工具实现**: 参考 docs/sources/notes-coding-agent.md § 3.2（ToolDefinition 模式）
-4. **Agent 逻辑**: 参考 docs/sources/notes-mini-swe-agent.md § 2（step/run 循环）
-5. **验证**: 执行实际命令；测试最小化（JUnit 5，Happy Path）
+1. **构建命令**（待实现后提取）: `mvn clean install`, `mvn spring-boot:run`, `mvn test`
+2. **脚手架**: Phase 1-2（参考 IMPLEMENTATION.md）
+3. **工具实现**: Phase 3（PathValidator → ReadFile → ListDir → Search → Replace）
+4. **Agent 逻辑**: Phase 4（AgentService 单轮流程）
+5. **测试**: Phase 6（单元 + 集成 + 手动）
 
 ## 实践准则
 
