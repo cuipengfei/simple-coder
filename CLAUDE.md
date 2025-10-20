@@ -134,27 +134,34 @@ mvn clean compile
 mvn test
 
 # 单个测试类
-mvn test -Dtest=AgentServiceTest
+mvn test -Dtest=ToolRequestTest
 
 # 多个测试类
 mvn test -Dtest="ToolRequestTest,ToolResponseTest"
 
-# 运行应用（需 OPENAI_API_KEY）
-OPENAI_API_KEY=sk-xxx mvn spring-boot:run
+# 运行应用
+mvn spring-boot:run
 
 # 打包
 mvn clean package
 ```
-环境变量设置：
-Windows:
-```cmd
-set OPENAI_API_KEY=sk-xxx
+
+## 配置说明
+默认配置（application.yml）使用本地模型：
+```yaml
+spring.ai.openai:
+  api-key: dummy-local
+  base-url: http://localhost:4141
+  chat.options.model: gpt-4.1
 ```
-Unix:
-```bash
-export OPENAI_API_KEY=sk-xxx
-```
-未设置 OPENAI_API_KEY 时 auto 模式会失败（模型调用异常）。
+如需使用 OpenAI 官方 API，需修改配置或设置环境变量：
+- Windows: `set OPENAI_API_KEY=sk-xxx`
+- Unix: `export OPENAI_API_KEY=sk-xxx`
+
+资源限制配置：
+- `simple-coder.max-file-lines`: 500（单文件最大读取行数）
+- `simple-coder.max-list-results`: 200（list 工具最大返回数）
+- `simple-coder.max-search-results`: 50（search 工具最大结果数）
 
 ## 约束与非目标
 - 不支持单请求多工具或并行执行。
