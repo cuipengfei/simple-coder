@@ -16,19 +16,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 架构总览
 ```
-Client → POST /api/agent (ToolRequest JSON)
+Web UI (index.html) → POST /api/agent (ToolRequest JSON)
+    ↓
     Controller (AgentController)
         → AgentService.process()
             → ChatClient.tools(toolsService) (Spring AI 自动选择工具并提取参数)
             → ToolsService @Tool 方法执行 (readFile | listFiles | searchText | replaceText)
                 → PathValidator 路径安全
                 → 文件 / 目录 / 文本操作
+    ↓
 返回 ToolResponse JSON （可选 data）
+    ↓
+Web UI 显示聊天气泡（用户 prompt + Agent 响应）
 ```
 特性：
 - 无状态：ToolRequest.contextHistory 携带全部历史；服务端不落地。
 - 单工具：每个请求仅一次工具调用。
 - 自然语言：用户发送自然语言 prompt，模型自动选择工具并提取参数。
+- 聊天式 UI：使用 Tailwind CSS + Inter 字体，聊天气泡显示历史记录。
 
 ## 核心组件
 ### Model 层 (com.simplecoder.model)
@@ -162,6 +167,16 @@ spring.ai.openai:
 - `simple-coder.max-file-lines`: 500（单文件最大读取行数）
 - `simple-coder.max-list-results`: 200（list 工具最大返回数）
 - `simple-coder.max-search-results`: 50（search 工具最大结果数）
+
+## Web UI 说明
+前端使用现代聊天式界面（src/main/resources/static/index.html）：
+- **CDN 依赖**：Tailwind CSS（样式）+ Google Fonts Inter（字体）
+- **布局**：聊天应用风格，输入框在底部，消息区域在上方自动滚动
+- **历史记录**：客户端 JavaScript 维护 contextHistory（最多 20 条），每次请求携带
+- **消息显示**：用户消息蓝色气泡靠右，Agent 响应白色气泡靠左
+- **加载状态**：发送请求时显示 "加载中..." 占位消息
+- **快捷键**：Ctrl/Cmd + Enter 发送请求
+- **无状态**：刷新页面后历史清空（仅客户端内存）
 
 ## 约束与非目标
 - 不支持单请求多工具或并行执行。

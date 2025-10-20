@@ -48,7 +48,7 @@ public class ToolResponse {
      * Creates a success response with message and data.
      *
      * @param message success message
-     * @param data optional result data
+     * @param data    optional result data
      * @return ToolResponse with success=true
      */
     public static ToolResponse success(String message, Object data) {
@@ -73,7 +73,7 @@ public class ToolResponse {
      * Creates an error response with message and optional error details.
      *
      * @param message user-friendly error message
-     * @param error detailed error information
+     * @param error   detailed error information
      * @return ToolResponse with success=false
      */
     public static ToolResponse error(String message, String error) {
