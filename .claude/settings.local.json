@@ -19,7 +19,9 @@
       "Bash(pkill:*)",
       "Bash(taskkill:*)",
       "WebSearch",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(grep:*)",
+      "Read(//c/Users/39764/.claude/**)"
     ],
     "deny": [],
     "ask": []
