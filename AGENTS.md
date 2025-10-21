@@ -118,5 +118,20 @@ Successful response example (truncation format per spec):
 ## Extension Notes (Out of Current Scope)
 > Potential future evolution only: multi‑step planning, parallel tools, conversational memory, semantic cache, diff editing. Simplified implementation preserved for educational clarity.
 
+## Shell Execution Policy (Override)
+All shell command examples and actual `functions.shell` invocations MUST prefer `bash` (or direct binary execution) and MUST NOT rely on PowerShell (`pwsh`) specific syntax or features.
+
+Guidelines:
+1. Always structure multi‑command invocations as: `command:["bash","-lc","<commands>"]` when shell features (globbing, pipes, environment variables) are needed.
+2. For single direct executables without shell features (e.g. `rg`, `mvn`, `java`) you may call them directly (e.g. `command:["rg","pattern","path"]`) — this avoids any shell dependency.
+3. Do not use PowerShell cmdlets (`Get-ChildItem`, pipelines with `| Select-Object`, etc.). Replace with portable `bash`/POSIX equivalents (`ls`, `find`, `grep`, etc.).
+4. Documentation updates, examples, and future patches must follow this policy. If the runtime environment lacks `bash`, that is treated as an environment provisioning issue to be resolved externally rather than a reason to fall back to `pwsh`.
+5. When adding new examples, prefer minimally portable constructs (e.g. `find . -name '*.java' | head -20`).
+
+Precedence: This section overrides any prior implicit assumption about default shell (previous environment metadata listing `pwsh.exe` is no longer authoritative for authoring examples).
+
+### Patch Application Policy (Mandatory)
+For any repository file creation, modification, rename, or deletion the agent MUST use the special `apply_patch` virtual command (i.e. `command:["apply_patch","*** Begin Patch\n...\n*** End Patch\n"]`). Direct mutation via shell redirections (`>`, `>>`), in-place editors (`sed -i`, `perl -pi`), or here-docs is PROHIBITED even under `bash`. Rationale: ensures atomic, reviewable, minimal diffs and prevents accidental broad edits. If an operation appears simpler with shell redirection, rewrite it as an explicit patch instead. The only acceptable non-`apply_patch` executions are pure read/build/test commands (e.g. `rg`, `mvn test`).
+
 ---
 This file is the root‑level unified specification; if subdirectories add more detailed AGENTS.md, the more specific file takes precedence.
