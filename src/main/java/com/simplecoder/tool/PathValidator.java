@@ -1,5 +1,6 @@
 package com.simplecoder.tool;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -17,10 +18,17 @@ import java.nio.file.Paths;
  * - Resolves relative paths and normalizes them
  * - Throws SecurityException for paths outside repo
  */
+@Getter
 @Slf4j
 @Component
 public class PathValidator {
 
+    /**
+     * -- GETTER --
+     * Gets the repository root path.
+     *
+     * @return absolute path to repository root
+     */
     private final Path repoRoot;
 
     public PathValidator(@Value("${simple-coder.repo-root}") String repoRootPath) {
@@ -37,49 +45,50 @@ public class PathValidator {
      * @throws IllegalArgumentException if path is null or empty
      */
     public Path validate(String pathString) {
+        validateNotEmpty(pathString);
+        Path resolvedPath = resolvePath(pathString);
+        Path normalizedPath = resolveSymlinks(resolvedPath);
+        ensureWithinRepo(normalizedPath);
+
+        log.debug("Validated path: {} -> {}", pathString, normalizedPath);
+        return normalizedPath;
+    }
+
+    private void validateNotEmpty(String pathString) {
         if (pathString == null || pathString.trim().isEmpty()) {
             throw new IllegalArgumentException("Path cannot be null or empty");
         }
+    }
 
-        // Convert to Path and resolve against repo root if relative
+    private Path resolvePath(String pathString) {
         Path path = Paths.get(pathString);
-        Path resolvedPath;
-
         if (path.isAbsolute()) {
-            resolvedPath = path.normalize();
+            return path.normalize();
         } else {
-            resolvedPath = repoRoot.resolve(path).normalize();
+            return repoRoot.resolve(path).normalize();
         }
+    }
 
-        // Convert to real path to resolve symlinks (if exists)
+    private Path resolveSymlinks(Path path) {
         try {
-            resolvedPath = resolvedPath.toRealPath();
+            return path.toRealPath();
         } catch (IOException e) {
             // File doesn't exist yet, use normalized path
             // This is OK for operations like create/write
-            log.debug("Path does not exist (yet): {}", resolvedPath);
+            log.debug("Path does not exist (yet): {}", path);
+            return path;
         }
+    }
 
-        // Security check: ensure resolved path is within repo root
-        if (!resolvedPath.startsWith(repoRoot)) {
+    private void ensureWithinRepo(Path path) {
+        if (!path.startsWith(repoRoot)) {
             String errorMsg = String.format(
                     "Path '%s' is outside repository root '%s'",
-                    resolvedPath, repoRoot
+                    path, repoRoot
             );
             log.warn("Security violation: {}", errorMsg);
             throw new SecurityException(errorMsg);
         }
-
-        log.debug("Validated path: {} -> {}", pathString, resolvedPath);
-        return resolvedPath;
     }
 
-    /**
-     * Gets the repository root path.
-     *
-     * @return absolute path to repository root
-     */
-    public Path getRepoRoot() {
-        return repoRoot;
-    }
 }

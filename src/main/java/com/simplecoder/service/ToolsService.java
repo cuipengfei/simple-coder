@@ -16,6 +16,10 @@ import java.util.List;
 /**
  * Unified service containing all coding agent tools as @Tool annotated methods.
  * Spring AI ChatClient will automatically handle tool selection and parameter extraction.
+ *
+ * <p>Design: Each @Tool method is kept concise by delegating complex logic to focused helper methods.
+ * This follows Single Responsibility Principle - tools handle orchestration and error wrapping,
+ * while helpers handle specific concerns (validation, formatting, I/O operations).
  */
 @Slf4j
 @Service
@@ -47,61 +51,18 @@ public class ToolsService {
 
         try {
             Path file = pathValidator.validate(filePath);
-
-            if (!Files.exists(file)) {
-                return "Error: File not found: " + filePath;
-            }
-
-            if (!Files.isRegularFile(file)) {
-                return "Error: Path is not a regular file: " + filePath;
-            }
+            validateFileExists(file, filePath);
 
             List<String> allLines = Files.readAllLines(file);
-            int totalLines = allLines.size();
-
-            if (totalLines == 0) {
+            if (allLines.isEmpty()) {
                 return "Read " + filePath + " (empty file: 0 lines)";
             }
 
-            int start = startLine != null ? startLine : 1;
-            int end = endLine != null ? Math.min(endLine, totalLines) : totalLines;
+            LineRange range = validateAndParseLineRange(startLine, endLine, allLines.size());
+            List<String> selectedLines = selectAndTruncateLines(allLines, range);
+            String formattedContent = formatLinesWithNumbers(selectedLines, range.start());
 
-            if (start > totalLines) {
-                return "Error: Start line " + start + " exceeds file length (" + totalLines + " lines)";
-            }
-
-            if (start < 1) {
-                return "Error: Line numbers must be >= 1";
-            }
-
-            if (end < start) {
-                return "Error: End line must be >= start line";
-            }
-
-            List<String> selectedLines = allLines.subList(start - 1, end);
-
-            boolean truncated = false;
-            if (selectedLines.size() > maxFileLines) {
-                selectedLines = selectedLines.subList(0, maxFileLines);
-                truncated = true;
-            }
-
-            StringBuilder content = new StringBuilder();
-            int lineNumWidth = String.valueOf(start + selectedLines.size() - 1).length();
-            for (int i = 0; i < selectedLines.size(); i++) {
-                int lineNum = start + i;
-                content.append(String.format("%" + lineNumWidth + "d | %s", lineNum, selectedLines.get(i)));
-                if (i < selectedLines.size() - 1) {
-                    content.append("\n");
-                }
-            }
-
-            String message = "Read " + filePath + " (lines " + start + "-" + (start + selectedLines.size() - 1) + " of " + totalLines + " total)";
-            if (truncated) {
-                message += " [TRUNCATED: showing first " + maxFileLines + " lines, " + (end - start + 1 - maxFileLines) + " more available]";
-            }
-
-            return message + "\n\n" + content.toString();
+            return buildReadFileMessage(filePath, range, allLines.size(), selectedLines.size()) + "\n\n" + formattedContent;
 
         } catch (SecurityException e) {
             log.warn("Security violation in readFile: {}", e.getMessage());
@@ -115,41 +76,18 @@ public class ToolsService {
         }
     }
 
-    @Tool(description = "List directory contents or files matching glob pattern (e.g., 'src/**/*.java'). Returns list of relative file paths.")
+    @Tool(description = "List directory contents or files matching glob pattern (e.g., 'src/**/*.txt', '**/*.md'). Returns list of relative file paths.")
     public String listFiles(
-            @ToolParam(description = "Directory path or glob pattern (e.g., 'src/main/java' or '**/*.java')") String path) {
+            @ToolParam(description = "Directory path or glob pattern (e.g., 'src/docs' or '**/*.txt')") String path) {
 
         try {
             Path repoRoot = pathValidator.getRepoRoot();
-
             boolean isGlob = path.contains("*") || path.contains("?");
 
-            List<String> results;
-            if (isGlob) {
-                results = listWithGlob(path, repoRoot);
-            } else {
-                Path dirPath = pathValidator.validate(path);
-                if (!Files.exists(dirPath)) {
-                    return "Error: Directory not found: " + path;
-                }
-                if (!Files.isDirectory(dirPath)) {
-                    return "Error: Path is not a directory: " + path;
-                }
-                results = listDirectory(dirPath, repoRoot);
-            }
+            List<String> results = isGlob ? listWithGlob(path, repoRoot) : listDirectory(path, repoRoot);
+            List<String> truncatedResults = truncateResults(results, maxListResults);
 
-            boolean truncated = false;
-            if (results.size() > maxListResults) {
-                results = results.subList(0, maxListResults);
-                truncated = true;
-            }
-
-            String message = "Found " + results.size() + " items matching '" + path + "'";
-            if (truncated) {
-                message += " [TRUNCATED: first " + maxListResults + " items]";
-            }
-
-            return message + "\n\n" + String.join("\n", results);
+            return formatListFilesMessage(path, truncatedResults.size(), results.size()) + "\n\n" + String.join("\n", truncatedResults);
 
         } catch (SecurityException e) {
             log.warn("Security violation in listFiles: {}", e.getMessage());
@@ -262,19 +200,107 @@ public class ToolsService {
         }
     }
 
-    // Helper methods
+    // Helper methods for readFile
 
-    private List<String> listDirectory(Path dir, Path repoRoot) throws IOException {
+    private record LineRange(int start, int end, boolean wasTruncated) {}
+
+    private void validateFileExists(Path file, String filePath) throws IOException {
+        if (!Files.exists(file)) {
+            throw new IOException("File not found: " + filePath);
+        }
+        if (!Files.isRegularFile(file)) {
+            throw new IOException("Path is not a regular file: " + filePath);
+        }
+    }
+
+    private LineRange validateAndParseLineRange(Integer startLine, Integer endLine, int totalLines) throws IOException {
+        int start = startLine != null ? startLine : 1;
+        int end = endLine != null ? Math.min(endLine, totalLines) : totalLines;
+
+        if (start < 1) {
+            throw new IOException("Line numbers must be >= 1");
+        }
+        if (start > totalLines) {
+            throw new IOException("Start line " + start + " exceeds file length (" + totalLines + " lines)");
+        }
+        if (end < start) {
+            throw new IOException("End line must be >= start line");
+        }
+
+        return new LineRange(start, end, false);
+    }
+
+    private List<String> selectAndTruncateLines(List<String> allLines, LineRange range) {
+        List<String> selected = allLines.subList(range.start() - 1, range.end());
+        if (selected.size() > maxFileLines) {
+            return selected.subList(0, maxFileLines);
+        }
+        return selected;
+    }
+
+    private String formatLinesWithNumbers(List<String> lines, int startLineNum) {
+        StringBuilder content = new StringBuilder();
+        int lineNumWidth = String.valueOf(startLineNum + lines.size() - 1).length();
+
+        for (int i = 0; i < lines.size(); i++) {
+            int lineNum = startLineNum + i;
+            content.append(String.format("%" + lineNumWidth + "d | %s", lineNum, lines.get(i)));
+            if (i < lines.size() - 1) {
+                content.append("\n");
+            }
+        }
+        return content.toString();
+    }
+
+    private String buildReadFileMessage(String filePath, LineRange range, int totalLines, int selectedSize) {
+        String message = "Read " + filePath + " (lines " + range.start() + "-" + (range.start() + selectedSize - 1) + " of " + totalLines + " total)";
+
+        int requestedSize = range.end() - range.start() + 1;
+        if (selectedSize < requestedSize) {
+            int remaining = requestedSize - selectedSize;
+            message += " [TRUNCATED: showing first " + maxFileLines + " lines, " + remaining + " more available]";
+        }
+        return message;
+    }
+
+    // Helper methods for listFiles
+
+    private List<String> listDirectory(String path, Path repoRoot) throws IOException {
+        Path dirPath = pathValidator.validate(path);
+        if (!Files.exists(dirPath)) {
+            throw new IOException("Directory not found: " + path);
+        }
+        if (!Files.isDirectory(dirPath)) {
+            throw new IOException("Path is not a directory: " + path);
+        }
+
         List<String> results = new ArrayList<>();
-        try (var stream = Files.list(dir)) {
-            stream.forEach(path -> {
-                String relativePath = repoRoot.relativize(path).toString().replace('\\', '/');
+        try (var stream = Files.list(dirPath)) {
+            stream.forEach(p -> {
+                String relativePath = repoRoot.relativize(p).toString().replace('\\', '/');
                 results.add(relativePath);
             });
         }
         results.sort(String::compareTo);
         return results;
     }
+
+    private List<String> truncateResults(List<String> results, int maxResults) {
+        if (results.size() > maxResults) {
+            return results.subList(0, maxResults);
+        }
+        return results;
+    }
+
+    private String formatListFilesMessage(String path, int displayedCount, int totalCount) {
+        String message = "Found " + displayedCount + " items matching '" + path + "'";
+        if (displayedCount < totalCount) {
+            message += " [TRUNCATED: first " + maxListResults + " items]";
+        }
+        return message;
+    }
+
+    // Helper methods for glob pattern matching
 
     private List<String> listWithGlob(String pattern, Path repoRoot) throws IOException {
         PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + pattern);

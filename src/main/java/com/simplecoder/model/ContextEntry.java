@@ -39,23 +39,14 @@ public class ContextEntry {
 
     /**
      * Creates a formatted summary of this entry for context.
+     * Returns full prompt and result without truncation to provide complete context to LLM.
      *
      * @return formatted string with timestamp, prompt, and result
      */
     public String getSummary() {
         return String.format("[%s] User: %s | Result: %s",
                 timestamp,
-                truncate(prompt, 50),
-                truncate(result, 100));
-    }
-
-    private String truncate(String text, int maxLength) {
-        if (text == null) {
-            return "null";
-        }
-        if (text.length() <= maxLength) {
-            return text;
-        }
-        return text.substring(0, maxLength) + "...";
+                prompt != null ? prompt : "null",
+                result != null ? result : "null");
     }
 }

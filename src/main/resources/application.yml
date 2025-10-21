@@ -1,4 +1,6 @@
 simple-coder:
+  # ${user.dir} is a Java system property that resolves to the current working directory
+  # where the application is started. This ensures file operations are relative to the project root.
   repo-root: ${user.dir}
   max-file-lines: 500
   max-search-results: 50
@@ -15,3 +17,8 @@ spring:
 
 server:
   port: 8080
+
+logging:
+  level:
+    org.springframework.ai: DEBUG
+    com.simplecoder.config.SimpleLoggerAdvisor: INFO

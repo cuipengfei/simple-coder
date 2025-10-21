@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8"/>
@@ -79,7 +79,7 @@
             </div>
             <div class="flex gap-3">
           <textarea id="prompt"
-                    placeholder="例如: Read src/main/java/com/simplecoder/service/AgentService.java lines 1-40"
+                    placeholder="Example: Read src/main/java/com/simplecoder/service/AgentService.java lines 1-40"
                     class="flex-1 px-4 py-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                     rows="3"></textarea>
                 <button id="sendBtn"
@@ -138,7 +138,7 @@
       contextHistory.push({
         timestamp: new Date().toISOString(),
         prompt: prompt,
-        result: '加载中...',
+        result: 'Loading...',
         loading: true
       });
       renderHistory();
@@ -161,7 +161,7 @@
           contextHistory.push({
             timestamp: new Date().toISOString(),
             prompt: prompt,
-            result: json.message || '失败',
+            result: json.message || 'Failed',
             error: json.error || 'unknown error'
           });
         }
@@ -172,7 +172,7 @@
         contextHistory.push({
           timestamp: new Date().toISOString(),
           prompt: prompt,
-          result: '请求异常',
+          result: 'Request failed',
           error: e.message
         });
         renderHistory();

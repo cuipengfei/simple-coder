@@ -35,7 +35,13 @@ public class ToolResponse {
     /**
      * Optional structured data (e.g., file content, search results).
      * Type depends on the tool used.
+     *
+     * <p>Using Object type is appropriate here because:
+     * - Different tools return different data types (String for file content, List for search results, etc.)
+     * - Jackson handles serialization/deserialization correctly with @JsonInclude(NON_NULL)
+     * - Alternative would be generic type ToolResponse<T>, but adds complexity for minimal benefit
      */
+//    todo: check if being object is ok?
     private Object data;
 
     /**

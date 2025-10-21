@@ -1,99 +1,99 @@
-# Architecture Patterns - 架构设计模式对比
+# Architecture Patterns
 
-本文档对比分析三个来源中的核心架构模式。
+This document analyzes and compares core architectural patterns across the three sources.
 
 ---
 
-## 1. 架构范式对比
+## 1. Architectural Paradigm Comparison
 
-| 维度 | Source 1 (System Prompts) | Source 2 (Coding Agent) | Source 3 (Mini SWE Agent) |
+| Dimension | Source 1 (System Prompts) | Source 2 (Coding Agent) | Source 3 (Mini SWE Agent) |
 |------|---------------------------|-------------------------|---------------------------|
-| **核心模型** | 系统提示工程驱动 | 事件循环 + 工具注册 | 三组件协议（Agent/Model/Environment） |
-| **语言/技术栈** | 多平台（Python/TS/其他） | Go + Anthropic SDK | Python + 协议抽象 |
-| **复杂度** | 高（多平台配置） | 中（约 200-300 行核心代码） | 低（核心约 100 行） |
-| **扩展性** | 配置驱动 | 工具定义切片 | 协议实现 |
+| **Core Model** | System prompt engineering driven | Event loop + tool registration | Three-component protocol (Agent/Model/Environment) |
+| **Language/Stack** | Multi-platform (Python/TS/others) | Go + Anthropic SDK | Python + protocol abstraction |
+| **Complexity** | High (multi-platform config) | Medium (~200–300 lines core) | Low (~100 lines core) |
+| **Extensibility** | Config-driven | Slice of ToolDefinition | Protocol implementation |
 
 ---
 
-## 2. 事件循环设计
+## 2. Event Loop Design
 
-### 2.1 Source 2: Go 事件循环
+### 2.1 Source 2: Go Event Loop
 
-**位置**: `Agent.Run()` 方法
+**Location**: `Agent.Run()` method
 
-**核心流程**:
+**Core Flow**:
 ```
-1. 获取用户输入 (getUserMessage)
-2. 添加到对话历史 (conversation []MessageParam)
-3. 调用 API (runInference)
-4. 处理响应
-   - 文本块 → 显示给用户
-   - tool_use 块 → 执行工具，收集结果
-5. 发送工具结果回 Claude
-6. 回到步骤 1
+1. Get user input (getUserMessage)
+2. Append to conversation (conversation []MessageParam)
+3. Call API (runInference)
+4. Process response
+   - Text blocks → display to user
+   - tool_use blocks → execute tool, collect result
+5. Send tool results back to model
+6. Loop
 ```
 
-**特点**:
-- **同步循环**
-- **完整对话历史持久化**（`conversation` 切片）
-- **工具结果即时反馈**（作为新的用户消息）
+**Characteristics**:
+- Synchronous loop
+- Full conversation persists (`conversation` slice)
+- Tool results immediate feedback (as new user message)
 
-### 2.2 Source 3: Agent.step() 循环
+### 2.2 Source 3: Agent.step() Loop
 
-**位置**: `DefaultAgent.run()` + `step()`
+**Location**: `DefaultAgent.run()` + `step()`
 
-**核心流程**:
+**Core Flow**:
 ```
 run():
-1. 初始化消息历史（system + instance 模板）
-2. 循环调用 step()
-3. 捕获异常（NonTerminating → 继续，Terminating → 退出）
+1. Initialize message history (system + instance templates)
+2. Loop calling step()
+3. Catch exceptions (NonTerminating → continue, Terminating → exit)
 
 step():
-1. 查询模型 (query)
-2. 解析动作 (parse_action - 提取 bash 代码块)
-3. 执行动作 (execute_action - 调用 env.execute)
-4. 检查完成 (has_finished)
-5. 渲染观察 (render_template - action_observation_template)
-6. 添加到历史 (add_message)
+1. Query model
+2. Parse action (extract bash code block)
+3. Execute action (env.execute)
+4. Check completion (has_finished)
+5. Render observation (template)
+6. Append to history (add_message)
 ```
 
-**特点**:
-- **异常驱动控制流**
-- **模板化观察反馈**
-- **无工具抽象**（仅 bash 命令）
-- **线性消息历史**
+**Characteristics**:
+- Exception-driven control flow
+- Template-based observation feedback
+- No tool abstraction (bash commands only)
+- Linear message history
 
-### 2.3 对比总结
+### 2.3 Comparison Summary
 
-| 特性 | Source 2 (Go) | Source 3 (Python) |
+| Feature | Source 2 (Go) | Source 3 (Python) |
 |------|---------------|-------------------|
-| **用户输入** | 闭包函数 `getUserMessage` | 模板初始化（无持续输入）|
-| **API 调用** | `runInference()` 封装 | `model.query()` 协议方法 |
-| **工具执行** | 查找 `ToolDefinition` → 执行 `Function` | 解析 bash 代码块 → `env.execute()` |
-| **结果反馈** | `ToolResultBlock` 作为用户消息 | 观察文本通过模板格式化 |
-| **循环控制** | 无限循环（用户退出） | 异常驱动退出 |
+| **User Input** | Closure `getUserMessage` | Template initialization (no continuous input) |
+| **API Call** | `runInference()` wrapper | `model.query()` protocol method |
+| **Tool Execution** | Lookup `ToolDefinition` → execute `Function` | Parse bash block → `env.execute()` |
+| **Result Feedback** | `ToolResultBlock` as user message | Observation text formatted via template |
+| **Loop Control** | Infinite until user exits | Exception-driven exit |
 
 ---
 
-## 3. 工具/动作系统
+## 3. Tool / Action Systems
 
-### 3.1 Source 1: 系统提示中的工具分类
+### 3.1 Source 1: Tool Categories in Prompts
 
-**四大类**:
-1. **文件操作**: create_file, edit_file, read_file, write_file
-2. **搜索/发现**: grep, code_search, glob, semantic_search
-3. **执行**: bash, run_terminal, execute
-4. **验证**: get_diagnostics, run_linter, get_errors
+**Four Categories**:
+1. **File operations**: create_file, edit_file, read_file, write_file
+2. **Search/discovery**: grep, code_search, glob, semantic_search
+3. **Execution**: bash, run_terminal, execute
+4. **Validation**: get_diagnostics, run_linter, get_errors
 
-**特点**:
-- 通过提示词定义工具行为
-- 无代码级抽象，依赖 LLM 理解
-- 平台间工具名称和参数不统一
+**Characteristics**:
+- Behavior defined via prompt text
+- No code-level abstraction; relies on LLM interpretation
+- Tool names & parameters inconsistent across platforms
 
-### 3.2 Source 2: ToolDefinition 结构
+### 3.2 Source 2: ToolDefinition Structure
 
-**Go 结构体**:
+**Go Struct**:
 ```go
 type ToolDefinition struct {
     Name        string
@@ -103,83 +103,83 @@ type ToolDefinition struct {
 }
 ```
 
-**特点**:
-- **类型安全**: Go 结构体 + JSON Schema 自动生成
-- **模块化**: 每个工具独立定义
-- **统一执行**: 集中式工具查找和调用
+**Characteristics**:
+- Type safety: Go struct + JSON Schema auto generation
+- Modular: each tool defined independently
+- Unified execution: centralized lookup and invocation
 
-**示例工具**: read_file, list_files, bash, edit_file, code_search
+**Example Tools**: read_file, list_files, bash, edit_file, code_search
 
-### 3.3 Source 3: 无工具抽象
+### 3.3 Source 3: No Tool Abstraction
 
-**设计哲学**:
-- **仅 bash 命令**：无自定义工具或函数调用
-- **无状态执行**：每个动作通过独立的 `subprocess.run` 调用
-- **极简主义**：核心 Agent 约 100 行
+**Design Philosophy**:
+- Bash commands only; no custom tools/functions
+- Stateless execution: each action via separate `subprocess.run`
+- Minimalism: core agent ~100 lines
 
-**动作流程**:
+**Action Flow**:
 ```
-模型响应 → 正则提取 bash 代码块 → env.execute(command) → 返回 (output, returncode)
+Model response → regex extract bash block → env.execute(command) → return (output, returncode)
 ```
 
-### 3.4 对比总结
+### 3.4 Comparison Summary
 
-| 维度 | Source 1 | Source 2 | Source 3 |
+| Dimension | Source 1 | Source 2 | Source 3 |
 |------|----------|----------|----------|
-| **抽象层级** | 提示词描述 | Go 结构体 + Schema | 无抽象（bash 原生） |
-| **类型安全** | 无 | 强类型（Go + Schema） | 弱类型（字符串命令） |
-| **扩展性** | 新增提示描述 | 新增 ToolDefinition | 环境切换（Docker/Singularity） |
-| **验证** | LLM 自行判断 | Schema 验证 | 无验证（依赖 bash 语法） |
+| **Abstraction Level** | Prompt description | Go struct + Schema | None (bash native) |
+| **Type Safety** | None | Strong (Go + Schema) | Weak (string commands) |
+| **Extensibility** | Add prompt description | Add ToolDefinition | Change environment (Docker/Singularity) |
+| **Validation** | LLM judgment | Schema validation | None (bash syntax only) |
 
 ---
 
-## 4. 并行执行策略
+## 4. Parallel Execution Strategies
 
-### 4.1 Source 1: 多平台策略对比
+### 4.1 Source 1: Multi-Platform Strategy Comparison
 
-| 平台 | 策略 | 关键指令 |
+| Platform | Strategy | Key Instructions |
 |------|------|----------|
-| **Same.dev** | 激进并行 | "DEFAULT TO PARALLEL" <br> 3-5x 速度提升 |
-| **v0** | 上下文收集并行 | 专注于 read 操作（GrepRepo, LSRepo, ReadFile） |
-| **VSCode Agent** | 限制性并行 | 禁止并行 `semantic_search` 和多次 `run_in_terminal` |
-| **Amp** | 多层级并行 | 并行 reads/searches/diagnostics/writes（冲突时串行）/subagents |
-| **Windsurf** | 无显式指令 | 依赖模型判断 |
+| **Same.dev** | Aggressive parallel | "DEFAULT TO PARALLEL" (claims 3–5x speed) |
+| **v0** | Context gathering parallel | Focus on read ops (GrepRepo, LSRepo, ReadFile) |
+| **VSCode Agent** | Restricted parallel | Forbids parallel `semantic_search` & multiple `run_in_terminal` |
+| **Amp** | Multi-level parallel | Parallel reads/searches/diagnostics/writes (serial on conflict)/subagents |
+| **Windsurf** | No explicit directive | Relies on model judgment |
 
-**共识**:
-- Read 操作普遍可并行
-- Write 操作需冲突检测
-- 执行类工具（bash/terminal）通常串行
+**Consensus**:
+- Read operations broadly parallelizable
+- Write operations require conflict detection
+- Execution tools (bash/terminal) generally serial
 
-### 4.2 Source 2 & 3: 无并行机制
+### 4.2 Source 2 & 3: No Parallel Mechanism
 
-- **Source 2 (Go)**: 串行工具执行，逐个处理 `tool_use` 块
-- **Source 3 (Python)**: 单步执行，每次 `step()` 仅处理一个动作
+ - **Source 2 (Go)**: Serial tool execution processing each `tool_use` block sequentially
+ - **Source 3 (Python)**: Single action per `step()` execution
 
-**原因**:
-- 简化实现
-- 避免状态冲突
-- 适用于单用户交互场景
+**Reasons**:
+- Simplify implementation
+- Avoid state conflicts
+- Suited to single-user interaction scenario
 
 ---
 
-## 5. 消息历史管理
+## 5. Message History Management
 
-### 5.1 Source 2: Go 切片
+### 5.1 Source 2: Go Slice
 
 ```go
 conversation := []anthropic.MessageParam{
     anthropic.NewUserMessage(userInput),
-    message.ToParam(),  // Claude 响应
+    message.ToParam(),  // Claude response
     anthropic.NewUserMessage(toolResults...),
 }
 ```
 
-**特点**:
-- 完整对话历史（用户消息 + 模型响应 + 工具结果）
-- 每次 API 调用传递完整 `conversation`
-- 无消息修剪或汇总
+**Characteristics**:
+- Full conversation history (user + model responses + tool results)
+- Pass complete `conversation` each API call
+- No trimming or summarization
 
-### 5.2 Source 3: Python 列表
+### 5.2 Source 3: Python List
 
 ```python
 self.messages = [
@@ -190,31 +190,31 @@ self.messages = [
 ]
 ```
 
-**特点**:
-- 线性消息列表
-- 观察（命令输出）作为用户消息
-- 通过 `add_message(role, content)` 追加
+**Characteristics**:
+- Linear message list
+- Observations (command output) as user messages
+- Append via `add_message(role, content)`
 
-### 5.3 Source 1: 隐式管理
+### 5.3 Source 1: Implicit Management
 
-系统提示中未显式描述消息历史管理，假设由底层 API/框架处理。
+System prompts do not explicitly describe history management; assumed handled by underlying API/framework.
 
 ---
 
-## 6. 错误处理与异常机制
+## 6. Error Handling & Exception Mechanisms
 
-### 6.1 Source 1: 提示级错误恢复
+### 6.1 Source 1: Prompt-Level Error Recovery
 
-**验证强制**:
-- Same.dev: `run_linter` 每次编辑后，最多 3 次修复循环
-- Amp: `get_diagnostics` 任务完成后强制运行
-- VSCode Agent: `get_errors` 编辑后验证
+**Mandatory Validation**:
+- Same.dev: `run_linter` after edits, up to 3 fix cycles
+- Amp: `get_diagnostics` forced post task completion
+- VSCode Agent: `get_errors` after edit
 
-**升级策略**:
-- 3-5 次尝试后升级给用户
-- 不盲目猜测，方案明确时才修复
+**Escalation Strategy**:
+- Escalate after 3–5 attempts
+- Avoid blind guessing; fix only with clear plan
 
-### 6.2 Source 2: 返回值错误
+### 6.2 Source 2: Return-Value Errors
 
 ```go
 func ToolFunc(input json.RawMessage) (string, error) {
@@ -227,83 +227,83 @@ func ToolFunc(input json.RawMessage) (string, error) {
 }
 ```
 
-**特点**:
-- Go 标准错误返回
-- 错误记录日志
-- `ToolResultBlock.IsError` 标识错误
+**Characteristics**:
+- Go standard error return
+- Errors logged
+- `ToolResultBlock.IsError` flags error
 
-### 6.3 Source 3: 异常驱动
+### 6.3 Source 3: Exception-Driven
 
-**异常层级**:
+**Exception Hierarchy**:
 
 ```python
 NonTerminatingException
-├── FormatError            # 模型输出格式错误
-└── ExecutionTimeoutError  # 命令超时
+├── FormatError            # model output format error
+└── ExecutionTimeoutError  # command timeout
 
 TerminatingException
-├── Submitted              # 任务完成
-└── LimitsExceeded         # 步数/成本限制
+├── Submitted              # task completed
+└── LimitsExceeded         # step/cost limit reached
 ```
 
-**控制流**:
+**Control Flow**:
 ```python
 try:
     self.step()
 except NonTerminatingException as e:
-    self.add_message("user", str(e))  # 继续
+    self.add_message("user", str(e))  # continue
 except TerminatingException as e:
-    return (type(e).__name__, str(e))  # 退出
+    return (type(e).__name__, str(e))  # exit
 ```
 
-**特点**:
-- 可恢复错误 → 加入历史，继续
-- 终止条件 → 返回退出状态
+**Characteristics**:
+- Recoverable error → append, continue
+- Termination → return exit status
 
-### 6.4 对比总结
+### 6.4 Comparative Summary
 
-| 来源 | 机制 | 可恢复错误 | 终止条件 |
+| Source | Mechanism | Recoverable Errors | Termination |
 |------|------|------------|----------|
-| Source 1 | 提示指导的迭代修复 | Lint 错误、格式错误 | 3-5 次循环后 |
-| Source 2 | 返回值 `error` | 工具执行失败 | 用户退出循环 |
-| Source 3 | 异常驱动 | FormatError, ExecutionTimeoutError | Submitted, LimitsExceeded |
+| Source 1 | Prompt-guided iterative fixes | Lint errors, format errors | After 3–5 cycles |
+| Source 2 | Return `error` value | Tool execution failure | User exits loop |
+| Source 3 | Exception-driven | FormatError, ExecutionTimeoutError | Submitted, LimitsExceeded |
 
 ---
 
-## 7. 配置与扩展性
+## 7. Configuration & Extensibility
 
-### 7.1 Source 1: 提示词配置
+### 7.1 Source 1: Prompt-Based Configuration
 
-**机制**:
+**Mechanism**:
 - `.same/todos.md` (Same.dev)
 - `AGENTS.md` (Amp)
-- `create_memory` 工具 (Windsurf)
+ - `create_memory` tool (Windsurf)
 
-**特点**:
-- 运行时可修改
-- 特定于平台
-- 面向 LLM 的自然语言配置
+**Characteristics**:
+- Runtime mutable
+- Platform-specific
+- Natural language LLM-facing config
 
-### 7.2 Source 2: 代码级扩展
+### 7.2 Source 2: Code-Level Extension
 
-**机制**:
-- 新增 `ToolDefinition` 到 `Agent.tools` 切片
-- 通过 `GenerateSchema[T]()` 自动生成 Schema
-- 渐进演进：Chat → Read → List → Bash → Edit → CodeSearch
+**Mechanism**:
+- Add `ToolDefinition` to `Agent.tools` slice
+- Auto-generate schema via `GenerateSchema[T]()`
+- Progressive path: Chat → Read → List → Bash → Edit → CodeSearch
 
-**特点**:
-- 编译时类型检查
-- 需重新编译
-- 模块化工具定义
+**Characteristics**:
+- Compile-time type checking
+- Requires rebuild
+- Modular tool definitions
 
-### 7.3 Source 3: 协议实现
+### 7.3 Source 3: Protocol Implementation
 
-**机制**:
-- 实现 `Agent`、`Model`、`Environment` 协议
-- YAML 配置文件（`agent`、`model`、`environment`、`run`）
-- CLI 参数覆盖
+**Mechanism**:
+- Implement `Agent`, `Model`, `Environment` protocols
+- YAML config files (`agent`, `model`, `environment`, `run`)
+- CLI parameter overrides
 
-**示例**:
+**Example**:
 ```yaml
 environment:
   class: "DockerEnvironment"
@@ -314,55 +314,55 @@ model:
   name: "claude-3-5-sonnet-20241022"
 ```
 
-**特点**:
-- 协议驱动的多态
-- 运行时配置（YAML）
-- 无需重新编译
+**Characteristics**:
+- Protocol-driven polymorphism
+- Runtime YAML configuration
+- No rebuild required
 
-### 7.4 对比总结
+### 7.4 Summary Comparison
 
-| 维度 | Source 1 | Source 2 | Source 3 |
+| Dimension | Source 1 | Source 2 | Source 3 |
 |------|----------|----------|----------|
-| **配置位置** | 文件系统（.md, .same/） | 代码（Go 切片） | YAML + CLI |
-| **修改成本** | 低（编辑文件） | 高（重新编译） | 低（编辑 YAML） |
-| **类型安全** | 无 | 强 | 中（YAML 验证） |
-| **扩展方式** | 新增提示描述 | 新增 ToolDefinition | 实现协议 |
+| **Config Location** | Filesystem (.md, .same/) | Code (Go slice) | YAML + CLI |
+| **Change Cost** | Low (edit file) | High (recompile) | Low (edit YAML) |
+| **Type Safety** | None | Strong | Medium (YAML validation) |
+| **Extension** | Add prompt description | Add ToolDefinition | Implement protocol |
 
 ---
 
-## 8. 关键洞察
+## 8. Key Insights
 
-### 8.1 架构权衡
+### 8.1 Architectural Trade-offs
 
-| 特性 | 提示工程（Source 1） | 工具注册（Source 2） | 协议抽象（Source 3） |
+| Aspect | Prompt Engineering (Source 1) | Tool Registration (Source 2) | Protocol Abstraction (Source 3) |
 |------|---------------------|---------------------|---------------------|
-| **学习曲线** | 低 | 中 | 中-高 |
-| **类型安全** | 无 | 高 | 中 |
-| **运行时灵活性** | 高 | 低 | 高 |
-| **性能开销** | 低（提示解析） | 中（Go 反射） | 低（Python 协议） |
-| **调试难度** | 高（LLM 行为不可预测） | 中 | 低（清晰的执行路径） |
+| **Learning Curve** | Low | Medium | Medium-High |
+| **Type Safety** | None | High | Medium |
+| **Runtime Flexibility** | High | Low | High |
+| **Performance Overhead** | Low (prompt parsing) | Medium (Go reflection) | Low (Python protocols) |
+| **Debug Difficulty** | High (LLM unpredictability) | Medium | Low (clear execution path) |
 
-### 8.2 设计哲学差异
+### 8.2 Design Philosophy Differences
 
-- **Source 1**: 依赖 LLM 强大的理解能力，通过提示工程控制行为
-- **Source 2**: 强类型、编译时验证，适合生产环境
-- **Source 3**: 极简主义、协议驱动，适合研究和快速迭代
+ - **Source 1**: Relies on LLM comprehension; behavior steered via prompting
+ - **Source 2**: Strong typing & compile-time validation; production suitability
+ - **Source 3**: Minimalist protocol-driven; suited for research & rapid iteration
 
-### 8.3 适用场景
+### 8.3 Suitable Scenarios
 
-| 场景 | 推荐架构 | 理由 |
+| Scenario | Recommended Architecture | Rationale |
 |------|----------|------|
-| 快速原型 | Source 1 或 3 | 低开发成本，快速迭代 |
-| 生产系统 | Source 2 | 类型安全，可预测行为 |
-| 研究评估 | Source 3 | 极简实现，易于修改和分析 |
-| 多环境部署 | Source 3 | 协议抽象支持多种执行环境 |
+| Rapid Prototyping | Source 1 or 3 | Low dev cost, fast iteration |
+| Production System | Source 2 | Type safety, predictable behavior |
+| Research Evaluation | Source 3 | Minimal implementation, easy modification & analysis |
+| Multi-Environment Deployment | Source 3 | Protocol abstraction supports varied environments |
 
 ---
 
-## 参考资料
+## References
 
 - [Source 1: System Prompts](../sources/notes-system-prompts.md)
 - [Source 2: Coding Agent](../sources/notes-coding-agent.md)
 - [Source 3: Mini SWE Agent](../sources/notes-mini-swe-agent.md)
 
-**最后更新**: 2025-10-19
+**Last Updated**: 2025-10-19

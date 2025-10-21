@@ -1,99 +1,99 @@
-# Open Questions - 未解问题与空白点
+# Open Questions - Unresolved Issues & Gaps
 
-本文档记录三个来源中未充分说明的问题、矛盾之处和研究空白；并反映当前项目最新实现（含 listFiles 上限与截断）。
-
----
-## 1. 架构设计问题
-
-### 1.1 并行执行的实际效果
-**问题**: Same.dev 等声称并行提升 3–5x 但缺基准；本项目当前选择单工具串行，避免并行冲突与复杂度。
-**空白**: 并行对小型教育仓库的真实收益数据；冲突检测（写写/写读）策略。
-**方向**: 构造合成任务对比响应时间；评估是否需要最小“读操作并行”实现。
-
-### 1.2 消息历史修剪策略
-**现状**: 采用无状态服务端；客户端已实现上下文历史（最近 20 条）并随请求发送；仍缺“修剪/摘要”策略规范。
-**方向**: 经验值选 N=10–20；超出后仅保留最近 + 历史压缩摘要；考虑提供只读配置端点暴露当前阈值。
+This document captures issues insufficiently clarified across the three sources, contradictions, and research gaps; it also reflects the current implementation status (including listFiles limits and truncation semantics).
 
 ---
-## 2. 工具系统问题
+## 1. Architectural Design Issues
 
-### 2.1 replaceText 重叠匹配风险
-**现状**: 强制 old 唯一匹配；若未来出现“嵌套或重叠”误用需检测。
-**开放问题**: 是否需要预扫描定位索引后验证连续性与单一性。
-**可能策略**: 使用 indexOf + lastIndexOf + equals count；出现多次时返回所有上下文片段提示用户细化。
+### 1.1 Practical impact of parallel execution
+**Issue**: Same.dev claims 3–5x improvement with parallelism but lacks baseline; project currently chooses single-tool serial to avoid conflicts and complexity.
+**Gap**: Real benefit data for small educational repositories; conflict detection strategies (write/write, write/read).
+**Direction**: Construct synthetic tasks to compare response time; evaluate need for minimal "parallel read operations" implementation.
 
-### 2.2 listFiles 大结果测试缺失
-**现状**: 已实现 `max-list-results` + 截断提示；缺单测验证消息与边界（恰好等于上限 vs 超过）。
-**方向**: 构造临时目录 ≥ (N+5) 文件；断言截断与未截断两种场景。
-
-### 2.3 searchText 截断可配置粒度
-**现状**: snippet 固定 100 字符；是否需要允许用户调整？
-**风险**: 提升复杂度；教育版暂保持固定。
+### 1.2 Message history trimming strategy
+**Status**: Stateless server; client implements context history (latest 20) sent with each request; trimming/summarization specification missing.
+**Direction**: Empirical threshold N=10–20; beyond threshold keep recent plus compressed summary; consider read‑only config endpoint exposing current limit.
 
 ---
-## 3. 验证与错误处理
+## 2. Tool System Issues
 
-### 3.1 集成测试覆盖不足
-**现状**: 缺端到端（Controller + ChatClient + tool）验证 auto 路径。
-**开放问题**: 是否需要模拟 ChatClient 失败/不可用时的降级路径？
+### 2.1 replaceText overlapping match risk
+**Status**: Enforces unique `old` match; future misuse with nested or overlapping patterns may require detection.
+**Open Question**: Need pre‑scan indexing to verify continuity & singularity?
+**Possible Strategy**: Use indexOf + lastIndexOf + equality count; on multiple occurrences return contextual snippets prompting user refinement.
 
-### 3.2 Glob 安全边界可视化
-**现状**: 文档已说明基路径提取与安全校验；缺示例展示 glob 越界被拒绝的错误消息格式。
-**方向**: 增补示例：`List ../../secret/**/*` → Security error。
+### 2.2 listFiles large result test gap
+**Status**: Implemented `max-list-results` + truncation message; missing unit tests for messaging and boundary (exactly equals limit vs exceeds).
+**Direction**: Build temporary directory ≥ (N+5) files; assert truncation vs non‑truncation scenarios.
 
----
-## 4. 配置与扩展
-
-### 4.1 截断参数统一暴露
-**现状**: max-file-lines / max-search-results / max-list-results 分离；UI 目前未显示这些值。
-**开放问题**: 是否集中在单配置结构返回给前端？
-**方向**: 增加只读配置端点（后续 UI 实现时再评估）。
-
-### 4.2 显式“工具直连模式”
-**现状**: 后端忽略 toolType；完全依赖模型进行工具选择与参数提取。
-**开放问题**: 是否增加一个绕过模型的“直连模式”，以便在未配置代理/模型时仍可演示四个工具？
-**方向**: 新增后端端点或在现有接口增加参数，允许显式调用 ToolsService 方法。
+### 2.3 searchText truncation configurable granularity
+**Status**: Snippet fixed at 100 chars; question whether user adjustment needed.
+**Risk**: Increases complexity; educational version remains fixed.
 
 ---
-## 5. 文档一致性与维护
+## 3. Verification & Error Handling
 
-### 5.1 截断消息格式标准
-**现状**:
-- searchText 使用 `[TRUNCATED: reached limit <N> before completing search]`
-- listFiles 使用 `[TRUNCATED: first N items]`
-- readFile 使用 `[TRUNCATED: showing first N lines, M more available]`
-**开放问题**: 统一格式 vs 保留差异（差异表达早停原因 vs 简单列表裁剪 vs 行数裁剪）。
-**方向**: 保留差异以突出不同操作的截断语义差异。
+### 3.1 Insufficient integration test coverage
+**Status**: Missing end‑to‑end (Controller + ChatClient + tool) validation of auto path.
+**Open Question**: Need degraded path when ChatClient fails/unavailable?
 
-### 5.2 术语与命名一致性
-**现状**: 历史文档中仍有“ListDirTool”等旧称。
-**方向**: 统一为实现口径：listFiles、readFile、searchText、replaceText。
+### 3.2 Glob safety boundary visualization
+**Status**: Docs describe base path extraction & safety validation; missing example showing glob escape rejection message format.
+**Direction**: Add example: `List ../../secret/**/*` → Security error.
 
 ---
-## 6. 非当前优先的扩展主题（保持观察）
-- 并行读操作（仅在真实性能瓶颈出现时）
-- replaceText 多点编辑批处理模式（教育范围外）
-- 截断后分页机制（当前固定返回前 N 条）
-- 模型提示工程强化（当前最小 auto 名称分类足够）
-- UI 增强：显示当前截断阈值；显式工具参数化（直连模式）
+## 4. Configuration & Extension
+
+### 4.1 Unified exposure of truncation parameters
+**Status**: max-file-lines / max-search-results / max-list-results separated; UI not displaying these currently.
+**Open Question**: Aggregate into single config structure returned to frontend?
+**Direction**: Add read‑only config endpoint (evaluate with future UI implementation).
+
+### 4.2 Explicit "direct tool mode"
+**Status**: Backend ignores toolType; relies fully on model for tool selection & parameter extraction.
+**Open Question**: Add bypass mode for scenarios without configured provider/model to still demonstrate four tools?
+**Direction**: New backend endpoint or parameter enabling explicit ToolsService method invocation.
 
 ---
-## 优先级建议
-| 任务 | 优先级 | 原因 |
-|------|---------|------|
-| 集成测试 (auto) | 高 | 覆盖核心路径 |
-| listFiles 截断单测 | 高 | 现有逻辑未验证 |
-| UI 增强（阈值显示/直连模式） | 中 | 演示离线可用价值 |
-| 会话期上下文摘要策略 | 中 | 教学连续性 |
-| replaceText 重叠风险检测 | 低 | 尚无误用案例 |
-| 截断格式统一决策 | 低 | 当前差异可解释 |
+## 5. Documentation Consistency & Maintenance
+
+### 5.1 Truncation message format standard
+**Status**:
+- searchText uses `[TRUNCATED: reached limit <N> before completing search]`
+- listFiles uses `[TRUNCATED: first N items]`
+- readFile uses `[TRUNCATED: showing first N lines, M more available]`
+**Open Question**: Unify format vs keep semantic differences (early stop reason vs simple list clipping vs line count clipping).
+**Direction**: Retain differences to highlight semantic distinction per operation.
+
+### 5.2 Terminology & naming consistency
+**Status**: Historical docs still contain older names like "ListDirTool".
+**Direction**: Standardize to implementation terms: listFiles, readFile, searchText, replaceText.
 
 ---
-## 参考资料
+## 6. Lower Priority Future Topics (monitor only)
+- Parallel read operations (only if real performance bottlenecks emerge)
+- replaceText multi‑point batch edit mode (outside educational scope)
+- Post‑truncation pagination (currently fixed to first N)
+- Enhanced prompt engineering (current minimal auto naming sufficient)
+- UI improvements: show current truncation thresholds; explicit direct tool parameterization mode
+
+---
+## Priority Recommendations
+| Task | Priority | Reason |
+|------|----------|--------|
+| Integration tests (auto) | High | Cover core path |
+| listFiles truncation unit test | High | Current logic unverified |
+| UI enhancement (threshold display / direct mode) | Medium | Demonstrates offline utility |
+| Context summary strategy | Medium | Educational continuity |
+| replaceText overlap detection | Low | No misuse cases yet |
+| Truncation format unification decision | Low | Current differences explainable |
+
+---
+## References
 - sources/notes-system-prompts.md
 - sources/notes-coding-agent.md
 - sources/notes-mini-swe-agent.md
 - syntheses/architecture-patterns.md
 - syntheses/code-modification.md
 
-**最后更新**: 2025-10-19（同步最新实现状态）
+**Last Updated**: 2025-10-19 (synced with latest implementation status)

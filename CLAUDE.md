@@ -2,47 +2,51 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-> 说明：全文使用中文叙述，保留英文技术术语（类名、方法、依赖、命令等）。教育示例场景，倾向最小可行实现。
+> Note: All repository files must be in English. User communication is in Chinese, but all code, comments, documentation, and commit messages must be in English only. Technical terms (class names, methods, dependencies, commands) retain their original English form.
 
-## 场景与定位
-- 教学示例，非生产：追求最小改动即可通过测试并满足功能。
-- 单轮无状态：客户端每次请求携带完整上下文；服务端不存储会话。
-- 不支持：规划、自主多步、并行工具、持久记忆。
+## Scenario & Positioning
+- Educational example, non‑production: aim for minimal changes that pass tests and meet functionality.
+- Single‑turn stateless: client sends full context each request; server stores no session.
+- Unsupported: planning, autonomous multi‑step flows, parallel tools, persistent memory.
 
-## 技术栈
+## Tech Stack
 - Java 21 + Spring Boot 3.5.6
-- Spring AI 1.0.3（使用 ChatClient fluent API）
-- 构建：Maven
+- Spring AI 1.0.3 (ChatClient fluent API)
+- Build: Maven
 
-## 架构总览
+## Architecture Overview
 ```
 Web UI (index.html) → POST /api/agent (ToolRequest JSON)
     ↓
     Controller (AgentController)
         → AgentService.process()
-            → ChatClient.tools(toolsService) (Spring AI 自动选择工具并提取参数)
-            → ToolsService @Tool 方法执行 (readFile | listFiles | searchText | replaceText)
-                → PathValidator 路径安全
-                → 文件 / 目录 / 文本操作
+            → ChatClient.tools(toolsService) (Spring AI auto tool selection + parameter extraction)
+            → ToolsService @Tool methods execute (readFile | listFiles | searchText | replaceText)
+                → PathValidator path safety
+                → File / directory / text operations
     ↓
-返回 ToolResponse JSON （可选 data）
+Returns ToolResponse JSON (optional data)
     ↓
-Web UI 显示聊天气泡（用户 prompt + Agent 响应）
+Web UI shows chat bubbles (user prompt + agent response)
 ```
-特性：
-- 无状态：ToolRequest.contextHistory 携带全部历史；服务端不落地。
-- 单工具：每个请求仅一次工具调用。
-- 自然语言：用户发送自然语言 prompt，模型自动选择工具并提取参数。
-- 聊天式 UI：使用 Tailwind CSS + Inter 字体，聊天气泡显示历史记录。
+Characteristics:
+- Stateless: ToolRequest.contextHistory carries all history; server persists nothing.
+- Single tool: exactly one tool invocation per request.
+- Natural language: user sends prompt, model auto‑selects tool and extracts parameters.
+- Chat UI: Tailwind CSS + Inter font, chat bubbles show history.
 
-## 核心组件
-### Model 层 (com.simplecoder.model)
-- ToolRequest：prompt、toolType（现已废弃，保留兼容性）、contextHistory；方法：validate()、buildContextSummary()。
-- ToolResponse：success、message、data、error；静态工厂：success(...) / error(...)。
-- ContextEntry：timestamp、prompt、result、getSummary()（用于上下文压缩）。
+## Core Components
+### Model Layer (com.simplecoder.model)
+- ToolRequest: prompt, toolType (deprecated retained for compatibility), contextHistory; methods: validate(), buildContextSummary().
+- ToolResponse: success, message, data, error; static factories: success(...) / error(...).
+- ContextEntry: timestamp, prompt, result, getSummary() (for context compression).
+
+### Configuration Layer (com.simplecoder.config)
+- AiConfig: Configures ChatClient with SimpleLoggerAdvisor for basic request/response logging.
+- SimpleLoggerAdvisor: Implements CallAdvisor and StreamAdvisor; logs user messages, truncated responses (200 chars), and token counts; set logging level to INFO to view logs.
 
 ### ToolsService (com.simplecoder.service.ToolsService)
-统一服务包含四个 @Tool 注解方法，Spring AI ChatClient 自动调用：
+Unified service exposing four @Tool annotated methods; Spring AI ChatClient invokes automatically:
 
 ```java
 @Tool(description = "Read file contents, optionally with line range")
@@ -69,37 +73,38 @@ public String replaceText(
     @ToolParam(description = "New string to replace with") String newString)
 ```
 
-辅助：PathValidator 限制所有路径在仓库根。
+Helper: PathValidator constrains all paths to repository root.
 
 ### AgentService (com.simplecoder.service.AgentService)
-处理流程（已大幅简化）：
-1. 验证 ToolRequest。
-2. 构建上下文摘要（如有）。
-3. 调用 ChatClient：
+Processing flow (greatly simplified):
+1. Validate ToolRequest.
+2. Build context summary (if present).
+3. Invoke ChatClient:
 ```java
 String result = chatClient.prompt()
     .user(promptBuilder.toString())
-    .tools(toolsService)  // 注册所有 @Tool 方法
+    .tools(toolsService)  // register all @Tool methods
     .call()
     .content();
 ```
-4. Spring AI 自动：选择工具 → 提取参数 → 调用方法 → 返回结果。
-5. 捕获异常统一返回 ToolResponse.error("AgentService error", e.getMessage())。
-## 工具语义与资源限制
-- read：读取文件（可选行范围）；超出最大行数 → `[TRUNCATED: showing first N lines, M more available]`；空文件 → `empty file: 0 lines`。
-- list：列出目录或 glob；超过最大数量 → `[TRUNCATED: first N items]`。
-- search：正则或子串搜索；若在遍历未完成前达到结果上限 → `[TRUNCATED: reached limit N before completing search]`。
-- replace：精确唯一替换；old_string 未找到或出现次数≠1 → 失败。唯一性按非重叠出现统计（示例：内容 "aaa" + old_string "aa" 视为 1 次）。
+4. Spring AI auto: choose tool → extract parameters → invoke method → return result.
+5. Catch exceptions and return ToolResponse.error("AgentService error", e.getMessage()).
 
-## 错误处理
-- 失败路径：模型选择异常 / 工具运行异常 → `ToolResponse.error(message, detail)`。
-- `AgentService error` 为统一包装层。
-- 工具内部错误（路径越界、文件不存在等）由工具方法返回 "Error: ..." 前缀字符串。
+## Tool Semantics & Resource Limits
+- read: read file (optional line range); exceeding max lines → `[TRUNCATED: showing first N lines, M more available]`; empty file → `empty file: 0 lines`.
+- list: list directory or glob; exceeding max count → `[TRUNCATED: first N items]`.
+- search: regex or substring search; if limit reached before traversal completes → `[TRUNCATED: reached limit N before completing search]`.
+- replace: exact unique replacement; old_string not found or occurrence count ≠ 1 → failure. Uniqueness counted by non‑overlapping occurrences (example: content "aaa" + old_string "aa" counts as 1).
 
-## 接口示例
+## Error Handling
+- Failure paths: model selection exception / tool execution exception → `ToolResponse.error(message, detail)`.
+- `AgentService error` is unified wrapper layer.
+- Internal tool errors (path escape, file missing, etc.) returned by tool method with "Error: ..." prefix.
+
+## API Examples
 POST /api/agent
 Content-Type: application/json
-请求示例（自然语言）：
+Example request (natural language):
 ```
 {
   "prompt": "search for any java file",
@@ -107,7 +112,7 @@ Content-Type: application/json
   "contextHistory": []
 }
 ```
-或结构化格式（兼容）：
+Or structured format (compatibility):
 ```
 {
   "prompt": "Read src/main/java/com/simplecoder/service/AgentService.java lines 1-40",
@@ -115,7 +120,7 @@ Content-Type: application/json
   "contextHistory": []
 }
 ```
-成功响应示例：
+Successful response example:
 ```
 {
   "success": true,
@@ -125,73 +130,121 @@ Content-Type: application/json
 }
 ```
 
-## 测试覆盖概览
-- 已覆盖：Model 类、AgentController。
-- 未覆盖：ToolsService 工具方法单测、端到端集成测试（ChatClient + 实际模型调用）。
-- 暂不处理：replace 重叠匹配 edge case、多步连续交互场景。
+## Testing Strategy
+### Covered
+- Model classes: ToolRequest (validation, context summary), ToolResponse (factories), ContextEntry (summary generation)
+- AgentController: request validation, error handling, response format
 
-## 常用 Maven 命令
+### Not Covered (intentionally deferred for educational simplicity)
+- ToolsService tool method unit tests (readFile, listFiles, searchText, replaceText)
+- End‑to‑end integration tests with real ChatClient/model invocation
+- Edge cases: replace overlapping match ("aaa" + "aa"), oversized contextHistory handling
+
+### Testing API Manually
 ```bash
-# 清理并编译
-mvn clean compile
-
-# 全部测试
-mvn test
-
-# 单个测试类
-mvn test -Dtest=ToolRequestTest
-
-# 多个测试类
-mvn test -Dtest="ToolRequestTest,ToolResponseTest"
-
-# 运行应用
+# Start server
 mvn spring-boot:run
 
-# 打包
+# Test listFiles tool (natural language)
+curl -X POST http://localhost:8080/api/agent \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"list all java files","toolType":"auto","contextHistory":[]}'
+
+# Test readFile tool (structured prompt)
+curl -X POST http://localhost:8080/api/agent \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Read src/main/resources/application.yml","toolType":"auto","contextHistory":[]}'
+
+# Test searchText tool
+curl -X POST http://localhost:8080/api/agent \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"search for AgentService in src/main/java","toolType":"auto","contextHistory":[]}'
+```
+
+## Common Maven Commands
+```bash
+# Clean and compile
+mvn clean compile
+
+# All tests
+mvn test
+
+# Single test class
+mvn test -Dtest=ToolRequestTest
+
+# Multiple test classes
+mvn test -Dtest="ToolRequestTest,ToolResponseTest"
+
+# Run application (default port 8080)
+mvn spring-boot:run
+
+# Run application with timeout (30 seconds for testing)
+timeout 30 mvn spring-boot:run
+
+# Kill existing process on port 8080 (Windows)
+taskkill /F /FI "MEMUSAGE gt 0" | findstr "java"
+
+# Package
 mvn clean package
 ```
 
-## 配置说明
-默认配置（application.yml）使用本地模型：
+## Configuration Notes
+Default config (application.yml) using local model:
 ```yaml
 spring.ai.openai:
   api-key: dummy-local
   base-url: http://localhost:4141
   chat.options.model: gpt-4.1
+
+server:
+  port: 8080
+
+logging:
+  level:
+    org.springframework.ai: DEBUG
+    com.simplecoder.config.SimpleLoggerAdvisor: INFO
 ```
-如需使用 OpenAI 官方 API，需修改配置或设置环境变量：
+To use OpenAI official API, modify config or set environment variable:
 - Windows: `set OPENAI_API_KEY=sk-xxx`
 - Unix: `export OPENAI_API_KEY=sk-xxx`
 
-资源限制配置：
-- `simple-coder.max-file-lines`: 500（单文件最大读取行数）
-- `simple-coder.max-list-results`: 200（list 工具最大返回数）
-- `simple-coder.max-search-results`: 50（search 工具最大结果数）
+Resource limit configuration:
+- `simple-coder.repo-root`: ${user.dir} (Java system property, ensures file operations relative to project root)
+- `simple-coder.max-file-lines`: 500 (max file lines read)
+- `simple-coder.max-list-results`: 200 (list tool max results)
+- `simple-coder.max-search-results`: 50 (search tool max results)
 
-## Web UI 说明
-前端使用现代聊天式界面（src/main/resources/static/index.html）：
-- **CDN 依赖**：Tailwind CSS（样式）+ Google Fonts Inter（字体）
-- **布局**：聊天应用风格，输入框在底部，消息区域在上方自动滚动
-- **历史记录**：客户端 JavaScript 维护 contextHistory（最多 20 条），每次请求携带
-- **消息显示**：用户消息蓝色气泡靠右，Agent 响应白色气泡靠左
-- **加载状态**：发送请求时显示 "加载中..." 占位消息
-- **快捷键**：Ctrl/Cmd + Enter 发送请求
-- **无状态**：刷新页面后历史清空（仅客户端内存）
+## Web UI Notes
+Frontend chat‑style interface (`src/main/resources/static/index.html`):
+- CDN dependencies: Tailwind CSS (styles) + Google Fonts Inter (font)
+- Layout: chat application style; input at bottom; messages scroll above
+- History: client JavaScript maintains contextHistory (max 20 entries) sent each request
+- Message display: user messages blue bubble right; agent responses white bubble left
+- Loading state: shows "Loading..." placeholder during request
+- Shortcut: Ctrl/Cmd + Enter to send
+- Stateless: refresh clears history (client memory only)
 
-## 约束与非目标
-- 不支持单请求多工具或并行执行。
-- 不保存服务端会话状态（无 Redis/DB）。
-- 文件/路径操作严格限制仓库根（PathValidator）。
-- 不做大规模重构，除非为修复正确性。
+## Constraints & Non‑Goals
+- No multi‑tool or parallel execution per request.
+- No server‑side session persistence (no Redis/DB).
+- File/path operations strictly limited to repo root (PathValidator).
+- No large‑scale refactors unless for correctness fix.
 
-## 后续扩展指引
-- 新增工具：在 ToolsService 中添加 @Tool 注解方法，Spring AI 会自动识别。
-- 工具描述需清晰，便于模型选择。
-- 参数描述需详细，便于模型从自然语言提取。
-- 避免引入不必要依赖（mockito-core 已由 spring-boot-starter-test 覆盖基础需求）。
+## Future Extension Guidance
+- New tool: add @Tool annotated method in ToolsService; Spring AI auto detects.
+- Tool description should be clear for model selection.
+- Parameter descriptions should be detailed for natural language extraction.
+- Avoid unnecessary dependencies (mockito-core already covered by spring-boot-starter-test basics).
 
-## 已知但暂不处理的 Edge Cases
-- replace 重叠匹配（"aaa" + "aa"）统计为 1 次；仅在需要严格语义时再调整。
-- 超大 contextHistory：由客户端自行截断；服务端照单处理。
+## Known but Deferred Edge Cases
+- replace overlapping match ("aaa" + "aa") counts as 1; adjust only if stricter semantics required.
+- Oversized contextHistory: client truncates; server processes as received.
+
+## Communication Protocol
+**IMPORTANT**: While all repository content (code, docs, comments) must be in English, when communicating with the user during conversation:
+- Use **Chinese** for explanations, questions, and discussions
+- Use **English** for technical terms (class names, methods, variables, library names)
+- Use **English** for all code examples and file content
+- Example: "我会修改 `AgentService.java` 文件中的 `process()` 方法来处理这个问题。"
 
 End of file.

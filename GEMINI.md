@@ -1,52 +1,52 @@
 # GEMINI.md
 
-角色与流程
-- Gemini：规划/评审（仅关注架构契合与实质问题）；Claude Code：实现/测试（产出最小可行代码）。
-- 流程：plan → code → review → iterate。
-- 教育场景：示例非生产，禁止过度设计/吹毛求疵；不做风格与微优化争论；以最少依赖快速闭环。
+Roles & Flow
+- Gemini: planning / review (focus only on architectural alignment & substantive issues); Claude Code: implementation / testing (produce minimal viable code).
+- Process: plan → code → review → iterate.
+- Educational context: non‑production example; forbid over‑engineering / nit‑picking; skip style & micro‑optimizations; close loop quickly with minimal dependencies.
 
-教育用途声明（Educational Scope）
-- 本仓库为“教学用最小 Coding Agent”示例，不是生产系统；评审侧重：功能正确性、与文档规格一致性、最小安全（路径越界、防误替换）。
-- 不在评审范围：高并发、超大规模性能优化、复杂安全加固（除非直接影响示例正确性或清晰度）。
-- 当进行代码或测试评审时，应明确：仅指出会影响学习理解或导致明显错误/误导的“实质问题”，避免提出纯生产级优化（如微性能、抽象层泛化、扩展性重构）。
-- 允许保留简化实现（一次性读取文件、行级匹配、无差异预览）并在需要时通过注释或文档标注其“可扩展点”。
+Educational Scope Declaration
+- Repository is a "minimal educational Coding Agent" example, not a production system; review emphasis: functional correctness, spec alignment, minimal safety (path boundary, prevent mistaken replace).
+- Out of review scope: high concurrency, large‑scale performance tuning, complex security hardening (unless directly impacting clarity or correctness).
+- During code/test review: highlight only issues that hinder learning or cause clear errors/misleading outcomes; avoid pure production optimizations (micro performance, abstraction generalization, extensibility refactors).
+- Simplified implementations (single pass file read, line matching, no diff preview) are acceptable; annotate potential extension points with brief comments if needed.
 
-事实基线（当前仓库）
-- 技术栈：Java 21，Spring Boot 3.5.6，Spring AI 1.0.3（spring-ai-bom），依赖 spring-ai-starter-model-openai。
-- 架构：无状态服务端；客户端在 ToolRequest.contextHistory 携带上下文；无 ConversationContext。
-- 已有代码：SimpleCoderApplication；Models（ContextEntry / ToolRequest / ToolResponse）及单测；Tools（PathValidator / ListDirTool / ReadFileTool / SearchTool / ReplaceTool）及单测；AgentService（auto 工具选择 + LLM 调用）与 Controller（REST /api/agent）已实现；application.yml。
-- 待实现：最小 UI（单页 HTML/JS）、端到端集成测试（E2E）。
+Baseline Facts (Current Repository)
+- Tech stack: Java 21, Spring Boot 3.5.6, Spring AI 1.0.3 (spring-ai-bom), depends on spring-ai-starter-model-openai.
+- Architecture: stateless server; client carries context via ToolRequest.contextHistory; no ConversationContext.
+- Existing code: SimpleCoderApplication; models (ContextEntry / ToolRequest / ToolResponse) with unit tests; tools (PathValidator / ListDirTool / ReadFileTool / SearchTool / ReplaceTool) with tests; AgentService (auto tool selection + LLM call) and Controller (REST /api/agent) implemented; application.yml.
+- Pending: minimal UI (single-page HTML/JS), end‑to‑end integration tests (E2E).
 
-当前开放问题（需后续处理）
-1. （暂无阻塞性开放问题）
+Current Open Issues (to address later)
+1. (No blocking open issues presently)
 
-备注：使用模型名 gpt-4.1 已在配置中设定，视为当前教学场景下有效，无需再次评审；文档保持与 application.yml 一致键 `spring.ai.openai.chat.options.model`。
+Note: Model name gpt-4.1 already set in config; treated as valid for current educational scenario; keep docs consistent with key `spring.ai.openai.chat.options.model`.
 
-已解决问题（保留追溯，不再列为开放问题）
-- SearchTool 截断语义不一致：已统一行为（单文件达到上限→截断；目录完整遍历恰好达到上限→不截断），测试 `testSearchDirectoryExactLimitNoTruncation` 验证。
-- ReadFileTool 行号与性能问题：已用基于索引循环修复，测试 `testReadDuplicateLinesLineNumbersUnique` 验证。
+Resolved Issues (kept for traceability, no longer open)
+- SearchTool truncation semantics divergence: unified behavior (single file limit hit → truncation; directory full traversal equals limit → no truncation), test `testSearchDirectoryExactLimitNoTruncation` verifies.
+- ReadFileTool line numbering & performance: fixed with index loop; test `testReadDuplicateLinesLineNumbersUnique` verifies.
 
-硬性约束
-- 单轮交互：每次请求至多一个 Tool；无并行、无多步规划、无会话记忆。
-- 安全：文件操作仅限仓库根；ReplaceTool 强制 old_string 唯一匹配。
-- 依赖：任何使用前先查 pom.xml；不臆测新增依赖。
+Hard Constraints
+- Single turn: at most one Tool per request; no parallel, no multi‑step planning, no session memory.
+- Security: file operations limited to repo root; ReplaceTool enforces old_string unique match.
+- Dependencies: must check pom.xml before any usage; do not assume adding.
 
-配置约定
-- simple-coder.*：repo-root、max-file-lines、max-search-results。
-- Spring AI：`spring.ai.openai.chat.options.model`；API key 环境变量 OPENAI_API_KEY。
-- 模型名需更新为实际可用（gpt-3.5-turbo 可能不可用）。
+Configuration Conventions
+- simple-coder.*: repo-root, max-file-lines, max-search-results.
+- Spring AI: `spring.ai.openai.chat.options.model`; API key env var OPENAI_API_KEY.
+- Model name must be updated if actual availability changes (gpt-3.5-turbo may be unavailable).
 
-信息来源优先级
-1) docs/（sources、syntheses、references）
-2) DeepWiki 原文（实际阅读）
-3) 仍不明确时询问用户，并在 docs/ 补充引用锚点
+Information Source Priority
+1) docs/ (sources, syntheses, references)
+2) DeepWiki original text (actual reading)
+3) If still unclear ask user, then add anchor citation in docs/
 
-工作准则
-- 只指出“实质问题”，避免吹毛求疵。
-- 修改前阅读相关代码/测试/配置，保持最小可行与可验证。
+Working Guidelines
+- Point out only substantive issues; avoid nit‑picking.
+- Read related code/tests/config before changes; keep minimal viable & verifiable.
 
-开发命令
-- 构建：mvn clean compile
-- 测试：mvn test
-- 运行：mvn spring-boot:run（需 OPENAI_API_KEY）
-- 打包：mvn clean package
+Development Commands
+- Build: mvn clean compile
+- Test: mvn test
+- Run: mvn spring-boot:run (requires OPENAI_API_KEY)
+- Package: mvn clean package

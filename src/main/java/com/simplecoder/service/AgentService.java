@@ -26,6 +26,13 @@ public class AgentService {
      * Process a single ToolRequest using Spring AI's native tool calling.
      * The model automatically selects the appropriate tool and extracts parameters from natural language.
      *
+     * <p>Core mechanism:
+     * 1. ChatClient sends user prompt to LLM
+     * 2. LLM analyzes prompt and selects appropriate @Tool method from ToolsService
+     * 3. LLM extracts parameter values from natural language (e.g., "read file X lines 1-10")
+     * 4. Spring AI invokes the selected tool method with extracted parameters
+     * 5. Tool execution result is returned as string
+     *
      * @param request tool request with natural language prompt
      * @return ToolResponse with tool execution result
      */
@@ -42,14 +49,19 @@ public class AgentService {
 
             promptBuilder.append("User Request:\n").append(request.getPrompt());
 
-            // Let Spring AI ChatClient handle tool selection and parameter extraction automatically
+            log.debug("Processing request with prompt length: {} chars", promptBuilder.length());
+
             String result = chatClient.prompt()
                     .user(promptBuilder.toString())
-                    .tools(toolsService)  // Register all @Tool annotated methods
+                    .tools(toolsService)
                     .call()
                     .content();
+            // Check if tool execution failed (tools return "Error: ..." prefix on failure)
+            if (result != null && result.trim().startsWith("Error:")) {
+                log.warn("Tool execution returned error: {}", result.substring(0, Math.min(200, result.length())));
+                return ToolResponse.error("Tool execution failed", result);
+            }
 
-            log.info("Tool execution completed successfully");
             return ToolResponse.success("Tool execution result", result);
 
         } catch (Exception e) {

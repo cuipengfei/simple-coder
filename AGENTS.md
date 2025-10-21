@@ -1,101 +1,102 @@
 # AGENTS.md
 
-> 面向在本仓库内执行代码读写/测试/评审的 Coding Agent 统一操作规范。教学示例场景，追求“最小可行 + 可验证”，避免过度设计。中文说明，保留英文技术术语。
+> Unified operating specification for a Coding Agent performing code read/write / testing / review in this repository. Educational demonstration scenario: pursue "minimal viable + verifiable", avoid over‑engineering. Original Chinese narrative removed; all technical terms retained as in code.
 
-## 目标与定位
-- 教学用最小 Coding Agent；非生产环境，不讨论高并发/复杂扩展。
-- 单轮无状态：客户端每次请求携带全部上下文 (`ToolRequest.contextHistory`)；服务端不存储会话。
-- 每次交互至多一次工具调用（单工具自动选择）。
+## Goals & Scope
+- Minimal educational Coding Agent; non‑production, no discussion of high concurrency or complex scaling.
+- Single‑turn stateless: client sends full context each request (`ToolRequest.contextHistory`); server stores no session.
+- At most one tool invocation per interaction (single automatic tool selection).
 
-## 技术栈与依赖
+## Tech Stack & Dependencies
 - Java 21, Spring Boot 3.5.6
 - Spring AI 1.0.3 (`ChatClient` fluent API)
-- 构建：Maven（所有依赖以 `pom.xml` 为准；禁止臆测新增依赖）
-- 模型名配置：`spring.ai.openai.chat.options.model`；API key 环境变量：`OPENAI_API_KEY`
+- Build: Maven (all dependencies defined strictly by `pom.xml`; do not assume new ones)
+- Model name configuration: `spring.ai.openai.chat.options.model`; API key env var: `OPENAI_API_KEY`
 
-## 架构概览
+## Architecture Overview
 ```
 Client → POST /api/agent (ToolRequest JSON)
   AgentController
     → AgentService.process()
         → chatClient.prompt().tools(toolsService).call().content()
-            (Spring AI 自动：选择工具 → 参数抽取 → 调用 @Tool 方法)
+            (Spring AI auto: choose tool → extract parameters → invoke @Tool method)
                 ToolsService (readFile | listFiles | searchText | replaceText)
-                  → PathValidator (路径安全)
-返回 ToolResponse (success | error + data 可选)
+                  → PathValidator (path safety)
+Returns ToolResponse (success | error + optional data)
 ```
-特性：无状态 / 单工具 / 自然语言驱动。
+Traits: stateless / single tool / natural language driven.
 
-## 核心模型 (package `com.simplecoder.model`)
-- `ToolRequest`: `prompt`, `toolType`(已废弃保留兼容), `contextHistory`; 方法：`validate()`, `buildContextSummary()`。
-- `ToolResponse`: `success`, `message`, `data`, `error`; 静态工厂：`success(...)`, `error(...)`。
-- `ContextEntry`: `timestamp`, `prompt`, `result`; `getSummary()` 用于上下文压缩。
+## Core Models (package `com.simplecoder.model`)
+- `ToolRequest`: `prompt`, `toolType` (deprecated kept for compatibility), `contextHistory`; methods: `validate()`, `buildContextSummary()`.
+- `ToolResponse`: `success`, `message`, `data`, `error`; static factories: `success(...)`, `error(...)`.
+- `ContextEntry`: `timestamp`, `prompt`, `result`; `getSummary()` for context compression.
 
-## 服务组件
-- `ToolsService`: 提供四个 `@Tool` 方法（由 Spring AI 自动选择调用）：
-  - `readFile(filePath, startLine?, endLine?)` 读取文件（可选行范围）。
-  - `listFiles(path)` 目录列出或 glob。
-  - `searchText(pattern, searchPath, isRegex?, caseSensitive?)` 文本/正则搜索。
-  - `replaceText(filePath, oldString, newString)` 精确唯一替换。
-- `PathValidator`: 保证所有路径均在仓库根内，防止越界访问。
-- `AgentService`: 验证请求 → 构建上下文摘要 → 调用 `ChatClient` → 捕获异常统一包装为 `ToolResponse.error(...)`。
+## Service Components
+- `ToolsService`: exposes four `@Tool` methods (selected automatically by Spring AI):
+  - `readFile(filePath, startLine?, endLine?)` read file (optional line range).
+  - `listFiles(path)` list directory or glob.
+  - `searchText(pattern, searchPath, isRegex?, caseSensitive?)` text / regex search.
+  - `replaceText(filePath, oldString, newString)` exact unique replacement.
+- `PathValidator`: ensures all paths remain inside repository root; blocks escape.
+- `AgentService`: validate request → build context summary → call `ChatClient` → capture exceptions and wrap as `ToolResponse.error(...)`.
 
-## 工具语义与资源约束
-- readFile: 超出最大行数 → `"[TRUNCATED: showing first N lines, M more available]"`; 空文件 → `"empty file: 0 lines"`。
-- listFiles: 超过最大数量 → `"[TRUNCATED: first N items]"`。
-- searchText: 达到结果上限而未完整遍历 → `"[TRUNCATED: reached limit N before completing search]"`；完整遍历恰好等于上限不视为截断。
-- replaceText: 要求 `oldString` 在文件中出现次数==1；次数为 0 或 >1 → 返回失败（唯一性按非重叠出现统计）。
+## Tool Semantics & Resource Limits
+- readFile: exceeding max lines → `"[TRUNCATED: showing first N lines, M more available]"`; empty file → `"empty file: 0 lines"`.
+- listFiles: exceeding max count → `"[TRUNCATED: first N items]"`.
+- searchText: hit result limit before full traversal → `"[TRUNCATED: reached limit N before completing search]"`; full traversal exactly equals limit is NOT truncation.
+- replaceText: requires `oldString` occurrence count == 1; 0 or >1 → failure (uniqueness counted by non‑overlapping occurrences).
 
-## 错误与返回约定
-- 工具内部校验失败（路径越界 / 文件不存在 / 唯一性不满足）→ 返回以 `"Error: ..."` 前缀的字符串；由上层封装。
-- 服务层统一异常包装：`ToolResponse.error("AgentService error", detail)`。
-- 正常工具结果统一通过 `ToolResponse.success("Tool execution result", data)`。
+## Error & Return Conventions
+- Internal tool validation failure (path escape / file missing / uniqueness not met) → return string prefixed `"Error: ..."`; wrapper handles it.
+- Service layer exception unified wrapping: `ToolResponse.error("AgentService error", detail)`.
+- Normal tool results returned via `ToolResponse.success("Tool execution result", data)`.
 
-## 安全与硬性约束
-- 文件操作仅限仓库根路径（禁止绝对路径与向上越界如 `..`）。
-- 单轮交互，不做多步规划 / 并行工具 / 持久记忆。
-- `replaceText` 强制唯一匹配避免误写。
+## Security & Hard Constraints
+- File operations limited to repository root (no absolute paths, no upward escape like `..`).
+- Single turn only; no multi-step planning / parallel tools / persistent memory.
+- `replaceText` enforces unique match to avoid unintended edits.
+ - Repository content policy: all committed files must be fully in English (no Chinese characters); interaction with user remains in Chinese per communication protocol.
 
-## 截断策略（Consistency）
-- 行/项/结果超限时使用标准前缀说明，便于测试断言与调试。
-- 不在返回体中附加多余统计字段；用自然语言前缀说明即可。
+## Truncation Strategy (Consistency)
+- When line/item/result limits exceeded use standard prefix messages for test assertions and debugging.
+- Do NOT add extra statistical fields to returns; natural language prefix suffices.
 
-## 工作准则（Agent 行为）
-1. 修改前：阅读相关类 + 测试，确认语义；避免未验证的结构性重构。
-2. 保持最小可行：仅在需要满足新测试或修复明确缺陷时改动。
-3. 不做风格争论：仅指出会影响理解或造成错误的实质问题。
-4. 不新增无用抽象：延迟抽象；若有潜在扩展点，用简短英文注释标注 `// extensibility: ...`。
-5. 模糊需求务必向用户澄清，避免基于猜测实现。
-6. 依赖/版本：任何新增库前先确认教学必要性并征询用户。
+## Working Guidelines (Agent Behavior)
+1. Before modification: read related classes + tests; confirm semantics; avoid unverified structural refactors.
+2. Keep minimal viable: change only when needed for new tests or explicit defect fix.
+3. No style debates: point out only substantive issues affecting understanding or correctness.
+4. No unnecessary abstractions: defer abstraction; if potential extension, mark brief English comment `// extensibility: ...`.
+5. Clarify ambiguous requirements; never implement on guess.
+6. Dependencies/versions: confirm educational necessity before adding any library.
 
-## 开发命令
-- 构建：`mvn clean compile`
-- 测试：`mvn test`
-- 运行：`mvn spring-boot:run` (需 `OPENAI_API_KEY`)
-- 打包：`mvn clean package`
+## Development Commands
+- Build: `mvn clean compile`
+- Test: `mvn test`
+- Run: `mvn spring-boot:run` (requires `OPENAI_API_KEY`)
+- Package: `mvn clean package`
 
-## 测试策略
-- 优先单测已有模型与工具类；修改逻辑后新增针对性测试（最小覆盖）。
-- 断言截断/错误消息需匹配精确字符串前缀（保持稳定性）。
-- 避免为纯实现细节添加过度测试。
+## Testing Strategy
+- Prioritize unit tests for existing models and tool classes; after logic changes add targeted minimal coverage tests.
+- Assert truncation/error message prefix exact matches (stability).
+- Avoid excessive tests for pure implementation details.
 
-## 评审关注点
-- 功能正确性：行为与文档规范一致。
-- 安全边界：路径校验、唯一替换、不泄露仓库外内容。
-- 可读性：命名清晰、简洁；不额外冗长注释。
-- 不关注：微性能优化、通用化抽象、复杂缓存、并行调度。
+## Review Focus Points
+- Functional correctness: behavior matches documented specification.
+- Security boundaries: path validation, unique replacement, no leakage outside repository.
+- Readability: clear concise naming; avoid redundant comments.
+- Not in scope: micro‑performance, generalized abstraction, complex caching, parallel scheduling.
 
-## 信息来源优先级
-1. `docs/` 下 sources / syntheses / references
-2. 当前代码与测试实际行为
-3. 仍不明确 → 向用户询问，并在 `docs/` 适当文件补充说明
+## Information Source Priority
+1. `docs/` (sources / syntheses / references)
+2. Current code and test actual behavior
+3. If still unclear → ask user, then add clarification in `docs/` where appropriate
 
-## 变更原则
-- Root cause fix：定位源头问题，避免表面补丁。
-- DRY：若重复逻辑出现≥2次，考虑抽取方法；但避免为一次性场景过度封装。
-- SOLID：保持类职责单一；不要将多种工具语义混入非工具类。
+## Change Principles
+- Root cause fix: address origin, avoid superficial patches.
+- DRY: if logic repeats ≥2 times consider extraction; avoid over‑engineering one‑off cases.
+- SOLID: keep class responsibilities single; do not mix multiple tool semantics into non‑tool classes.
 
-## 执行示例（请求）
+## Execution Example (Request)
 ```json
 POST /api/agent
 {
@@ -104,7 +105,7 @@ POST /api/agent
   "contextHistory": []
 }
 ```
-成功响应示例（截断格式遵循约定）：
+Successful response example (truncation format per spec):
 ```json
 {
   "success": true,
@@ -114,9 +115,8 @@ POST /api/agent
 }
 ```
 
-## 扩展提示（非当前范围）
-> 以下仅为后续可能演进方向，不在当前实现要求：多步计划、并行工具、对话记忆、语义缓存、差异编辑。保留简化实现的教学可读性。
+## Extension Notes (Out of Current Scope)
+> Potential future evolution only: multi‑step planning, parallel tools, conversational memory, semantic cache, diff editing. Simplified implementation preserved for educational clarity.
 
 ---
-本文件为根级别统一规范；后续若子目录新增更细的 AGENTS.md，以子目录文件优先。
-
+This file is the root‑level unified specification; if subdirectories add more detailed AGENTS.md, the more specific file takes precedence.

@@ -15,6 +15,10 @@ import java.util.stream.Collectors;
  * - prompt: user's natural language request
  * - toolType: explicit tool selection (optional, "auto" delegates to LLM)
  * - contextHistory: previous conversation context entries (client-managed)
+ *
+ * <p>Naming: While "ToolRequest/ToolResponse" focuses on the tool-calling aspect,
+ * renaming to "AgentRequest/AgentResponse" would better reflect the broader agent concept.
+ * However, current naming is retained to avoid serialization/frontend compatibility impact.
  */
 @Data
 @Builder

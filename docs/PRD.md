@@ -1,71 +1,71 @@
-# PRD：教学用 Simple Coder Agent（Java + Spring AI）
+# PRD: Educational Simple Coder Agent (Java + Spring AI)
 
-用途与定位
-- 教学目的：理解 Coding Agent 工作原理，通过构建极简示例（非生产用途）。
-- 关注认知与方法，不追求性能/可用性。
+Purpose & Positioning
+- Educational: understand Coding Agent principles via minimal example (non‑production).
+- Focus on concepts & methodology, not performance/usability.
 
-受众
-- Java 学习者、在校生、对 Agent 感兴趣的工程师/研究者。
+Audience
+- Java learners, students, engineers/researchers interested in agents.
 
-角色与协作
-- Gemini：规划/评审（Planner/Reviewer）。
-- Claude Code：编码/测试（Coder）。
-- 流程：Gemini 规划与审阅 → Claude 实现 → Gemini 复盘。
+Roles & Collaboration
+- Gemini: planning/review.
+- Claude Code: coding/testing.
+- Flow: Gemini plan & review → Claude implement → Gemini retrospective.
 
-教学目标（Learning Outcomes）
-- 解释 Agent、Tool、单回合流程（single-turn；以“单工具调用”为教学目标）。
-- 说明最小工具集边界（read/list/search/replace，唯一匹配、路径安全）。
-- 基于 docs/ 与 DeepWiki 做可追溯结论与评审。
-- 识别常见风险（越权、误替换、过度输出）与最小应对。
+Learning Outcomes
+- Explain Agent, Tool, single-turn flow (teaching focus: single tool invocation).
+- Describe minimal toolset boundaries (read/list/search/replace, uniqueness, path safety).
+- Produce traceable conclusions & reviews grounded in docs/ and DeepWiki.
+- Recognize common risks (privilege escape, incorrect replace, excessive output) and minimal mitigations.
 
-范围（V0 教学版）
-- 单回合：以“单工具调用”为教学目标；实际使用 Spring AI 原生 tool-calling，后端不强制单次，模型可能 0/1/多 次工具调用；最终以文本结果返回；同一会话内可参考先前上下文。
-- 会话上下文：应用未关闭期间保留简短消息历史（用户请求、模型响应、工具结果摘要）；关闭/刷新后清空；不做跨会话持久化。
-- 最小工具：read_file、list_dir/glob、search（regex/contains）、replace（exact、唯一）。
-- 最小 UI：
-  - 单页（Single Page）。
-  - 输入区：多行文本框（占位提示）。
-  - 工具选择：下拉（Auto/read/list/search/replace，默认 Auto）。
-  - 执行按钮：Submit。
-  - 结果区：等宽字体、可复制；必要时标注“已截断/条目上限”。
-  - 轻量状态：空状态/加载中/错误横幅。
-  - 说明：当前后端忽略 ToolRequest.toolType，工具选择由模型决定；下拉仅作提示。
+Scope (V0 Educational Version)
+- Single turn: teaching objective is single tool invocation; uses Spring AI native tool-calling (backend not enforcing exactly one; model may choose 0/1/multiple); final output text; same session can reference prior context.
+- Session context: retain brief message history (user request, model response, tool result summary) while app open; cleared on refresh; no cross-session persistence.
+- Minimal tools: read_file, list_dir/glob, search (regex/contains), replace (exact, unique).
+- Minimal UI:
+  - Single-page.
+  - Input area: multiline textbox (placeholder guidance).
+  - Tool select: dropdown (Auto/read/list/search/replace, default Auto).
+  - Execute button: Submit.
+  - Result area: monospace, copyable; mark truncation/item limit when applicable.
+  - Lightweight states: empty/loading/error banner.
+  - Note: backend ignores ToolRequest.toolType; selection is model-driven; dropdown is advisory.
 
-非目标（V0）
-- 不做并行、多步规划、复杂验证、容器/沙箱、多模型。
-- 不做账户、持久化存储、权限、多页面导航、可视化 Diff、主题/无障碍等高级 UI。
-- 无跨会话记忆（仅会话期上下文）。
+Non-Goals (V0)
+- No parallelism, multi-step planning, complex validation, container/sandbox, multi-model.
+- No accounts, persistent storage, permissions, multi-page navigation, visual diff, theming/accessibility advanced UI.
+- No cross-session memory (session-only context).
 
-关键原则
-- 教学优先：以最小复杂度呈现关键概念与可观察输出。
-- 不盲测：优先 docs/，其次 DeepWiki；不凭标题或常识下结论。
-- 简洁沟通：只做被请求的事；失败透明（原因与最小下一步）。
-- 可追溯：观点能映射到文档与来源锚点。
+Key Principles
+- Teaching first: present key concepts & observable outputs with minimal complexity.
+- No blind inference: prioritize docs/, then DeepWiki; do not conclude from titles or assumptions.
+- Concise communication: do requested work only; failure transparent (reason + minimal next step).
+- Traceability: claims map to docs and source anchors.
 
-典型学习任务（样例）
-- 读取并解释指定文件片段（UI 查看结果文本）。
-- 搜索 docs/ 中“Agent”出现位置（列表摘要）。
-- 尝试一次精确替换：成功/失败路径与提示语差异。
-- 基于会话上下文连续完成两步轻任务（如先 search 再 read 某命中）。
+Sample Learning Tasks
+- Read & explain specific file segment (UI displays text result).
+- Search occurrences of "Agent" in docs/ (list summary).
+- Attempt a precise replacement: compare success/failure paths & messages.
+- Perform two light consecutive tasks using session context (e.g. search then read a hit).
 
-成功标准（教育版）
-- 概念理解：学习者能口头/书面解释核心概念与边界。
-- 任务设计：能提出 1–2 个最小用例与预期结果描述。
-- 风险意识：能主动避免越界与不唯一替换。
-- UI 可用性：单页 ≤5 个主要控件；结果可复制；错误文案清晰；会话期上下文可用。
-- 文档对齐：回答可追溯至 docs/ 与引用页，表达简洁。
+Success Criteria (Educational)
+- Concept mastery: learner can verbally/in writing explain core concepts & boundaries.
+- Task design: can propose 1–2 minimal use cases with expected outcomes.
+- Risk awareness: proactively avoids path escape & non-unique replacement.
+- UI usability: single page ≤5 primary controls; results copyable; clear error messages; session context usable.
+- Documentation alignment: answers trace back to docs/ & citation pages; concise expression.
 
-评估方式
-- 清单自检：按“学习目标/任务/风险/追溯/UI/上下文”勾选。
-- 简答测验：3–5 题覆盖概念、边界、失败处理与 UI/上下文行为。
-- 同伴评审：对另一位学习者的用例与结论给出简要反馈。
+Evaluation Methods
+- Checklist self-audit: tick learning outcomes / tasks / risks / traceability / UI / context.
+- Short quiz: 3–5 questions covering concepts, boundaries, failure handling, UI/context behavior.
+- Peer review: provide brief feedback on another learner's use case & conclusions.
 
-里程碑
-- M1（Docs）：完成 PRD、FEATURES、导航、术语与引用；样例任务与期望结果（文本）。
-- M2（实现草案）：交付单回合最小能力、会话期上下文与最小 UI（由 Claude Code 完成）。
-- M3（复盘）：基于使用反馈微调文案、提示语与评估清单。
+Milestones
+- M1 (Docs): complete PRD, FEATURES, navigation, glossary & citations; sample tasks with expected textual outcomes.
+- M2 (Implementation draft): deliver single-turn minimal capability, session context, minimal UI (Claude Code).
+- M3 (Retrospective): refine wording, prompts & evaluation checklist based on usage feedback.
 
-限制与声明
-- 仅供学习与示范；禁止作为生产系统或处理敏感数据。
-- 无质量与安全保证；所有输出仅作教学参考。
-- 依赖可用的 OpenAI 兼容服务：application.yml 当前配置为 dummy-local 与 base-url http://localhost:4141（无 /v1 路径）；若未提供兼容代理/服务，Auto 模式（原生 tool-calling）将不可用。
+Limitations & Disclaimers
+- For learning & demonstration only; not for production or sensitive data.
+- No guarantees of quality or security; outputs are educational references.
+- Depends on available OpenAI-compatible service: application.yml currently dummy-local with base-url http://localhost:4141 (no /v1); without compatible proxy/service auto tool-calling mode will be unavailable.

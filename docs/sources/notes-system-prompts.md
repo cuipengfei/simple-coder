@@ -1,273 +1,273 @@
 # Source 1: System Prompts and Models of AI Tools
 
-**来源**: x1xhlol/system-prompts-and-models-of-ai-tools
+**Source**: x1xhlol/system-prompts-and-models-of-ai-tools
 **DeepWiki**: https://deepwiki.com/x1xhlol/system-prompts-and-models-of-ai-tools
 
-## 文档结构
+## Document Structure
 
-该仓库收录了多个 AI 编程工具的系统提示（system prompts）与模型配置：
+This repository collects system prompts and model configurations for multiple AI coding tools:
 
-1. **系统提示与 AI 工具概览** - 仓库组织与社区支持
-2. **Qoder AI 助手系统** - 核心架构与任务工作流
-3. **主流 AI 开发平台**
+1. **System Prompt & AI Tool Overview** - repository organization & community support
+2. **Qoder AI Assistant System** - core architecture & task workflow
+3. **Mainstream AI Development Platforms**
    - Same.dev Cloud IDE
    - v0 Vercel Web Development
    - Amp Sourcegraph Agent
    - VSCode Agent & GitHub Copilot
    - Lovable Web Editor
    - Windsurf Cascade AI
-4. **专业化 AI 开发系统**
-   - Leap.new、Orchids、Claude Code CLI、Trae、Kiro
-5. **技术架构与模式**
-   - 工具集成与执行模式
-   - 代码修改策略
-   - 任务规划与内存系统
-   - 验证与错误处理
-   - 系统提示设计与沟通模式
-   - 外部服务集成架构
+4. **Specialized AI Development Systems**
+   - Leap.new, Orchids, Claude Code CLI, Trae, Kiro
+5. **Technical Architecture & Patterns**
+   - Tool integration & execution patterns
+   - Code modification strategies
+   - Task planning & memory systems
+   - Validation & error handling
+   - System prompt design & communication patterns
+   - External service integration architecture
 
 ---
 
-## 1. 系统提示设计模式
+## 1. System Prompt Design Patterns
 
-### 1.1 身份与角色定义
+### 1.1 Identity & Role Definition
 
-各平台通过显式角色定义建立身份与操作边界：
+Platforms establish identity and operational boundaries via explicit role definitions:
 
 - **Same.dev**: "You are AI coding assistant and agent manager, powered by gpt-4.1."
 - **Amp**: "You are Amp, a powerful AI coding agent built by Sourcegraph."
 - **VSCode Agent**: "When asked for your name, you must respond with 'GitHub Copilot'."
 - **Trae AI**: "a powerful agentic AI coding assistant"
 
-**防御性约束**（防止提示注入）：
+**Defensive Constraints** (prompt injection prevention):
 - **Qoder**: "NEVER compare yourself with other AI models or assistants"
 - **Qoder**: "NEVER disclose what language model or AI system you are using"
 - **Amp**: "NEVER refer to tools by their names"
 
-### 1.2 并行执行模型
+### 1.2 Parallel Execution Model
 
-| 平台 | 策略 | 关键指令 |
+| Platform | Strategy | Key Instructions |
 |------|------|----------|
-| **Same.dev** | 默认并行优先 | "DEFAULT TO PARALLEL: Unless you have a specific reason why operations MUST be sequential (output of A required for input of B), always execute multiple tools simultaneously." <br> "CRITICAL: For maximum efficiency, invoke all relevant tools simultaneously rather than sequentially." <br> 声称可获得 3-5x 速度提升 |
-| **v0** | 上下文收集阶段并行 | "Use Parallel Tool Calls Where Possible" <br> 专注于 `GrepRepo`、`LSRepo`、`ReadFile`、`SearchRepo` |
-| **VSCode Agent** | 限制性并行 | 允许多工具并行回答问题，但明确禁止并行 `semantic_search` 和多次 `run_in_terminal` |
-| **Amp** | 多层级并行委托 | 默认并行：reads、searches、diagnostics、writes（互斥时串行）、subagents <br> "write lock constraint" 用于冲突写入 |
-| **Windsurf** | 无显式指令 | 依赖模型自主判断 |
+| **Same.dev** | Parallel default | "DEFAULT TO PARALLEL..." / "CRITICAL: For maximum efficiency..." (claims 3–5x speed) |
+| **v0** | Parallel during context gathering | Emphasis on `GrepRepo`, `LSRepo`, `ReadFile`, `SearchRepo` |
+| **VSCode Agent** | Restricted parallel | Allows answering with multiple tools; forbids parallel `semantic_search` & multiple `run_in_terminal` |
+| **Amp** | Multi-level parallel delegation | Default parallel: reads, searches, diagnostics, writes (serial if mutually exclusive), subagents; "write lock constraint" for conflicting writes |
+| **Windsurf** | No explicit directive | Relies on model judgment |
 
-### 1.3 内存与任务管理
+### 1.3 Memory & Task Management
 
-| 平台 | 机制 | 文件格式 | 用途 |
+| Platform | Mechanism | File Format | Purpose |
 |------|------|----------|------|
-| **Same.dev** | 基于文件的 memo 系统 | `.same/todos.md` | 在用户消息后、任务完成后、多步骤任务中更新进度 |
-| **Amp** | 双系统 | `todo_write`/`todo_read` 工具 + `AGENTS.md` | 瞬态 TODO（工具）+ 持久化配置（常用命令、代码风格、结构） |
-| **Windsurf** | 语义内存数据库 | `create_memory` 工具 | 存储用户偏好、代码片段、架构决策、技术栈 |
+| **Same.dev** | File-based memo system | `.same/todos.md` | Update progress after user messages or task completion |
+| **Amp** | Dual system | `todo_write`/`todo_read` tools + `AGENTS.md` | Transient TODO (tools) + persistent config (commands, style, structure) |
+| **Windsurf** | Semantic memory DB | `create_memory` tool | Store user preferences, code fragments, architectural decisions, tech stack |
 
-**Amp TODO 系统细节**：
+**Amp TODO System Details**:
 - Schema: `id`, `content`, `status` (completed/in-progress/todo), `priority` (medium/low/high)
-- **关键要求**: "mark tasks as completed immediately upon finishing them, rather than batching them"
-- 工作流示例：
+- **Key Requirement**: "mark tasks as completed immediately upon finishing them, rather than batching them"
+  - Workflow example:
   ```
-  1. 写初始任务："Run the build", "Fix any type errors"
-  2. 构建失败后展开具体错误："Fix error 1", "Fix error 2", ...
-  3. 逐个标记 in_progress → completed
+  1. Write initial tasks: "Run the build", "Fix any type errors"
+  2. After build failure expand specific errors: "Fix error 1", "Fix error 2", ...
+  3. Mark each individually in_progress → completed
   ```
 
 ---
 
-## 2. 沟通策略
+## 2. Communication Strategies
 
-### 2.1 简洁性与非人格化
+### 2.1 Conciseness & Impersonal Tone
 
-| 平台 | 核心原则 | 具体指令 |
+| Platform | Core Principle | Instructions |
 |------|----------|----------|
-| **Same.dev** | 简洁沟通政策 | "Do what has been asked; nothing more, nothing less" <br> "NEVER refer to tool names, just say what the tool is doing in natural language" |
-| **VSCode Agent** | 简短非人格化 | "Keep your answers short and impersonal" <br> "Never say the name of a tool to a user" |
-| **Amp** | 无代码解释政策 | "Do not add additional code explanation summary unless requested by the user. After working on a file, just stop, rather than providing an explanation of what you did" |
-| **Orchids.app** | 直接简洁 | "BE DIRECT AND CONCISE: Keep all explanations brief and to the point" <br> "MINIMIZE CONVERSATION: Focus on action over explanation" |
+| **Same.dev** | Concise policy | "Do what has been asked; nothing more, nothing less" / "NEVER refer to tool names..." |
+| **VSCode Agent** | Short impersonal | "Keep your answers short and impersonal" / "Never say the name of a tool..." |
+| **Amp** | No code explanation | "Do not add additional code explanation summary unless requested..." |
+| **Orchids.app** | Direct concise | "BE DIRECT AND CONCISE..." / "MINIMIZE CONVERSATION..." |
 
-### 2.2 代码修改与输出
+### 2.2 Code Modification & Output
 
-**禁止直接输出代码**：
-- **Same.dev**: "NEVER output code directly to user, unless requested. Instead use one of the code edit tools"
-- **VSCode Agent**: "NEVER print out a codeblock with file changes unless the user asked for it. Use the insert_edit_into_file tool instead"
-- **Trae**: 允许 "simplified code block" 但严格使用占位符
+**Prohibition on direct code output**:
+- **Same.dev**: "NEVER output code directly to user..."
+- **VSCode Agent**: "NEVER print out a codeblock with file changes unless the user asked..."
+- **Trae**: allows "simplified code block" but strict placeholder usage
 
-**代码占位符标准化**：
+**Standardized code placeholders**:
 - **Qoder**: `// ... existing code ...`
 - **Same.dev**: `// ... existing code ...`
 - **Trae**: `// ... existing code ...`
 - **VSCode Agent**: `// ...existing code...`
 
-### 2.3 错误处理与验证
+### 2.3 Error Handling & Validation
 
-**强制验证步骤**（修改后必须执行）：
+**Mandatory validation steps** (must run after modifications):
 
-| 平台 | 工具 | 时机 | 错误恢复 |
+| Platform | Tool | Timing | Error Recovery |
 |------|------|------|----------|
-| **Same.dev** | `run_linter` | 每次重大编辑后 & 每个版本前 | 最多 3 次尝试修复，之后升级给用户 |
-| **VSCode Agent** | `get_errors` | 编辑文件后验证变更 | 修复相关错误 |
-| **Amp** | `get_diagnostics` + lint/typecheck 命令 | 任务完成后 | 不抑制错误除非用户明确要求 |
+| **Same.dev** | `run_linter` | After major edits & before each version | Up to 3 fix attempts then escalate |
+| **VSCode Agent** | `get_errors` | After editing file to validate changes | Fix related errors |
+| **Amp** | `get_diagnostics` + lint/typecheck | After task completion | Do not suppress errors unless user requests |
 
-**Same.dev 错误恢复循环**：
+**Same.dev Error Recovery Loop**:
 ```
-1. run_linter → 发现错误
-2. 修复（如果方案明确，不盲目猜测）
-3. run_linter → 仍有错误
-4. 重复最多 3 次
-5. 第 3 次后停止，询问用户
+1. run_linter → error found
+2. Fix (only if solution clear; avoid blind guessing)
+3. run_linter → errors remain
+4. Repeat up to 3 times
+5. After third attempt stop and ask user
 ```
 
 ---
 
-## 3. 工具集成与执行模式
+## 3. Tool Integration & Execution Patterns
 
-### 3.1 工具分类
+### 3.1 Tool Categories
 
-四大核心类别：
-1. **文件操作**: create_file, edit_file, read_file, write_file
-2. **搜索/发现**: grep, code_search, glob, semantic_search
-3. **执行**: bash, run_terminal, execute
-4. **验证**: get_diagnostics, run_linter, get_errors
+Four core categories:
+1. **File operations**: create_file, edit_file, read_file, write_file
+2. **Search/discovery**: grep, code_search, glob, semantic_search
+3. **Execution**: bash, run_terminal, execute
+4. **Validation**: get_diagnostics, run_linter, get_errors
 
-### 3.2 代码修改策略详解
+### 3.2 Code Modification Strategy Details
 
-#### `edit_file` 模式
+#### `edit_file` Mode
 
-| 平台 | 参数 | 特性 | 注意事项 |
+| Platform | Parameters | Traits | Notes |
 |------|------|------|----------|
-| **Amp** | `file_path`, `old_str`, `new_str`, `replace_all` | 返回 git-style diff <br> `old_str` 必须存在 <br> 两者必须不同 | 替换整个文件用 `create_file` |
-| **Same.dev** | 同上 | `smart_apply` 标志用于重试 | 文件 < 2500 行时使用 |
-| **Orchids.app** | 同上 | 使用截断注释最小化未变代码：`// ... rest of code ...`, `// ... keep existing code ...` | 删除代码有特定指令 |
-| **Qoder** | 同上 | 强烈偏好 `search_replace` 除非明确指示 | 使用 `// ... existing code ...` |
+| **Amp** | `file_path`, `old_str`, `new_str`, `replace_all` | Returns git-style diff <br> `old_str` must exist <br> Must differ | Full-file replacement use `create_file` |
+| **Same.dev** | Same | `smart_apply` flag for retry | Use when file < 2500 lines |
+| **Orchids.app** | Same | Truncation placeholders minimize unchanged code: `// ... rest of code ...`, `// ... keep existing code ...` | Special instructions for deletion |
+| **Qoder** | Same as above | Strong preference for `search_replace` unless explicitly instructed | Uses `// ... existing code ...` |
 
-#### `insert_edit` 模式
+#### `insert_edit` Mode
 
-- **VSCode Agent** 的 `insert_edit_into_file`:
-  - 参数: `explanation`, `filePath`, `code`
-  - 设计为"智能"，需要最少提示
-  - 使用 `// ...existing code...` 表示未变区域
+- **VSCode Agent** `insert_edit_into_file`:
+  - Parameters: `explanation`, `filePath`, `code`
+  - Designed to be "smart" requiring minimal prompting
+  - Uses `// ...existing code...` for unchanged regions
 
-#### `replace` 模式变体
+#### `replace` Mode Variants
 
-| 平台 | 工具名 | 核心特性 |
+| Platform | Tool Name | Core Features |
 |------|--------|----------|
-| **Lovable** | `lov-line-replace` | 基于行号的搜索替换 <br> 参数: `file_path`, `search`, `first_replaced_line`, `last_replaced_line`, `replace` <br> 支持省略号表示大段代码 |
-| **Same.dev** | `string_replace` | 文件 > 2500 行时使用 <br> 小编辑也推荐 |
-| **Windsurf** | `replace_file_content` | 使用 `ReplacementChunk` 数组 + `TargetContent` 匹配 |
-| **Qoder** | `search_replace` | 设计文档中的高效字符串替换 <br> 参数: `file_path`, `replacements[]` (含 `original_text`, `new_text`, `replace_all?`) <br> 严格要求唯一性、精确匹配、顺序处理 |
-| **Replit** | `<proposed_file_replace_substring>` | XML 格式 <br> 需要: `file_path`, `change_summary`, `<old_str>`, `<new_str>` <br> 另有 `<proposed_file_replace>` 替换整个文件 |
-| **Claude Code 2.0** | `Edit` 工具 | 精确字符串替换 <br> 参数: `file_path`, `old_string`, `new_string`, `replace_all?` <br> 强调保留精确缩进，确保 `old_string` 唯一或使用 `replace_all` |
+| **Lovable** | `lov-line-replace` | Line-number based search/replace <br> Parameters: `file_path`, `search`, `first_replaced_line`, `last_replaced_line`, `replace` <br> Ellipsis supported for large code sections |
+| **Same.dev** | `string_replace` | Use when file > 2500 lines <br> Also recommended for small edits |
+| **Windsurf** | `replace_file_content` | Uses `ReplacementChunk` array + `TargetContent` matching |
+| **Qoder** | `search_replace` | Efficient string replacement defined in design docs <br> Parameters: `file_path`, `replacements[]` (`original_text`, `new_text`, `replace_all?`) <br> Strict uniqueness, exact match, sequential processing |
+| **Replit** | `<proposed_file_replace_substring>` | XML format <br> Requires: `file_path`, `change_summary`, `<old_str>`, `<new_str>` <br> `<proposed_file_replace>` variant replaces entire file |
+| **Claude Code 2.0** | `Edit` tool | Precise string replacement <br> Parameters: `file_path`, `old_string`, `new_string`, `replace_all?` <br> Preserve indentation; ensure `old_string` unique or use `replace_all` |
 
-### 3.3 其他文件操作
+### 3.3 Other File Operations
 
-- **Amp**: `create_file` - 创建新文件或覆盖现有文件
-- **Lovable**: `lov-write` - 主要用于新建文件，或作为 `lov-line-replace` 失败时的回退
-- **Qoder**: `create_file` - 创建新设计文件，内容限制 600 行
+- **Amp**: `create_file` - create new file or overwrite existing
+- **Lovable**: `lov-write` - mainly for new files or fallback if `lov-line-replace` fails
+- **Qoder**: `create_file` - create new design file, content limit 600 lines
 
 ---
 
-## 4. 验证与错误处理深度分析
+## 4. Deep Analysis of Validation & Error Handling
 
-### 4.1 诊断工具对比
+### 4.1 Diagnostic Tool Comparison
 
-| 工具 | 平台 | 功能 | 使用场景 |
+| Tool | Platform | Function | Use Case |
 |------|------|------|----------|
-| `get_diagnostics` | Amp | 获取文件/目录的 errors、warnings、其他诊断 | 任务完成后强制运行 <br> 优先用于目录而非单文件 |
-| `get_diagnostics` | Traycer AI | 通过内置 LSP 分析代码 <br> 支持 glob 模式 (如 `*.ts`) <br> 可指定严重性 (Error/Warning/Information/Hint) | 多文件诊断 |
-| `run_linter` | Same.dev | 检查 linting 和运行时错误 | 每次重大编辑后 + 每个版本前 |
-| `get_errors` | VSCode Agent | 获取编译或 lint 错误 | 编辑文件后验证 <br> 查看用户看到的相同错误 |
+| `get_diagnostics` | Amp | Retrieve file/directory errors, warnings, other diagnostics | Mandatory post-task <br> Prefer directories over single file |
+| `get_diagnostics` | Traycer AI | Built-in LSP analysis <br> Supports glob (e.g. `*.ts`) <br> Severity filtering (Error/Warning/Information/Hint) | Multi-file diagnostics |
+| `run_linter` | Same.dev | Check linting & runtime errors | After major edits & before each version |
+| `get_errors` | VSCode Agent | Get compile or lint errors | Validate post-edit <br> View same errors as user |
 
-### 4.2 错误恢复策略
+### 4.2 Error Recovery Strategies
 
-**迭代修复模式**：
-1. **Amp**: 使用 `todo_write`/`todo_read` 分解任务 → 逐个标记 in_progress/completed → 失败时使用 `oracle` 工具获取专家指导
-2. **Same.dev**: 最多 3 次循环修复同一文件的 linter 错误
-3. **Cursor Prompts**: 同样限制 3 次，之后询问用户 <br> 强调自我纠正：任务报告为完成但测试/构建未成功时
-4. **Orchids.app**: 陷入循环时收集更多上下文或探索新方案
+**Iterative Repair Pattern**:
+1. **Amp**: use `todo_write`/`todo_read` to decompose tasks → mark each in_progress/completed → on persistent failure use `oracle` for expert guidance
+2. **Same.dev**: up to 3 repair loops for same file linter issues
+3. **Cursor Prompts**: same 3-attempt cap then ask user <br> self-correct if task marked complete but tests/build fail
+4. **Orchids.app**: when looping, gather more context or explore alternative approach
 
-**失败升级**：
-- **Comet Assistant**: 尝试至少 5 种不同方法后才声明失败 <br> 例外：认证要求时立即声明失败
+**Failure Escalation**:
+- **Comet Assistant**: declare failure only after ≥5 distinct attempts <br> Exception: immediate failure for auth prerequisites
 
-### 4.3 执行序列示例
+### 4.3 Execution Sequence Examples
 
-**Amp 构建修复工作流**：
+**Amp Build Fix Workflow**:
 ```
-用户: "Run the build and fix any type errors"
+User: "Run the build and fix any type errors"
 1. todo_write: ["Run the build", "Fix any type errors"]
-2. npm run build → 报告 10 个类型错误
+2. npm run build → reports 10 type errors
 3. todo_write: ["Fix error 1", "Fix error 2", ..., "Fix error 10"]
-4. 逐个标记 in_progress
-5. 修复错误 1 → 标记 completed
-6. 修复错误 2 → 标记 completed
+4. Mark each in_progress
+5. Fix error 1 → mark completed
+6. Fix error 2 → mark completed
    ...
-7. 所有错误修复后: get_diagnostics + 再次运行 build
+7. After all fixed: run get_diagnostics + rebuild
 ```
 
-**Same.dev Linter 循环**：
+**Same.dev Linter Loop**:
 ```
 1. edit_file (or string_replace)
-2. run_linter → 发现 3 个错误
-3. 修复错误（方案明确）
-4. run_linter → 仍有 1 个错误
-5. 再次修复
-6. run_linter → 无错误 → 继续
-（如果第 3 次仍失败 → 停止并询问用户）
+2. run_linter → finds 3 errors
+3. Fix errors (clear plan)
+4. run_linter → still 1 error
+5. Fix again
+6. run_linter → no errors → continue
+(If still failing after 3rd attempt → stop and ask user)
 ```
 
 ---
 
-## 5. 调试与反馈机制
+## 5. Debugging & Feedback Mechanisms
 
-### v0 的调试模式
-- 主要使用 `console.log` 语句进行调试
-- 日志通过 `<v0_app_debug_logs>` 返回
-- 用途：跟踪执行流程、检查变量、识别问题
-- **清理原则**: 问题解决后删除，除非持续有价值
+### v0 Debugging Mode
+- Primarily uses `console.log` statements for debugging
+- Logs returned via `<v0_app_debug_logs>`
+- Purpose: trace execution flow, inspect variables, identify issues
+- Cleanup principle: remove after issue resolved unless ongoing value
 
-### Orchids.app 错误处理模式
-- 修复错误时收集充分上下文理解根本原因
-- 陷入循环时：收集更多上下文或探索新方案
-- 认证错误处理：如用户已存在则显示错误消息（注册场景）
-
----
-
-## 6. 关键观察与模式
-
-### 6.1 共识点
-- **验证必要性**: 所有平台都强制修改后验证（lint/diagnostics/errors）
-- **错误恢复**: 普遍采用"迭代修复 + 用户升级"模式（3-5 次尝试后）
-- **占位符标准**: 广泛使用 `// ... existing code ...` 变体表示未变代码
-- **工具名隐藏**: 多数平台要求对用户隐藏工具名称，使用自然语言描述
-
-### 6.2 分歧点
-- **并行执行哲学**: Same.dev（激进并行）vs VSCode Agent（保守限制）vs Windsurf（无指令）
-- **代码修改工具**: edit_file vs insert_edit vs line-replace vs search_replace
-- **文件大小阈值**: Same.dev 使用 2500 行区分 edit_file vs string_replace
-- **错误抑制**: Amp 明确禁止抑制编译器/lint 错误（除非用户明确要求）
-
-### 6.3 特殊机制
-- **Same.dev**: `smart_apply` 标志用于 edit_file 重试
-- **Amp**: `oracle` 工具用于复杂调试与专家指导
-- **Amp**: `AGENTS.md` 作为持久化配置文件（命令、风格、结构）
-- **Windsurf**: `create_memory` 语义数据库实现长期上下文保留
-- **Lovable**: 基于行号的 `lov-line-replace` 支持省略号
+### Orchids.app Error Handling Mode
+- Collect sufficient context to understand root cause while fixing errors
+- When stuck in loop: gather more context or explore alternative approaches
+- Auth error handling: if user already exists display error message (registration scenario)
 
 ---
 
-## 7. 外部服务集成
+## 6. Key Observations & Patterns
 
-（此部分在查询中未详细展开，但目录结构中存在 "5.6 External Service Integration Architecture"）
+### 6.1 Consensus Points
+- Validation necessity: all platforms enforce post-modification validation (lint/diagnostics/errors)
+- Error recovery: widely use "iterative repair + user escalation" pattern (after 3–5 attempts)
+- Placeholder standard: widely use `// ... existing code ...` variants for unchanged code
+- Tool name hiding: most platforms require hiding tool names from user, using natural language description
+
+### 6.2 Divergence Points
+- Parallel execution philosophy: Same.dev (aggressive parallelism) vs VSCode Agent (conservative limits) vs Windsurf (no directive)
+- Code modification tools: edit_file vs insert_edit vs line-replace vs search_replace
+- File size threshold: Same.dev uses 2500 lines to distinguish edit_file vs string_replace
+- Error suppression: Amp explicitly forbids suppressing compiler/lint errors (unless user explicitly requests)
+
+### 6.3 Special Mechanisms
+- Same.dev: `smart_apply` flag for edit_file retries
+- Amp: `oracle` tool for complex debugging and expert guidance
+- Amp: `AGENTS.md` as persistent config file (commands, style, structure)
+- Windsurf: `create_memory` semantic database for long-term context retention
+- Lovable: line-number-based `lov-line-replace` supports ellipsis
 
 ---
 
-## 参考资料
+## 7. External Service Integration
 
-- DeepWiki 仓库: https://deepwiki.com/x1xhlol/system-prompts-and-models-of-ai-tools
-- 查询结果:
-  - 系统提示设计与沟通策略
-  - 工具集成与执行模式
-  - 代码修改策略
-  - 验证与错误处理
-  - 任务规划与内存系统
+(Not detailed in retrieved sources; directory lists "5.6 External Service Integration Architecture")
 
-**最后更新**: 2025-10-19
+---
+
+## References
+
+- DeepWiki repository: https://deepwiki.com/x1xhlol/system-prompts-and-models-of-ai-tools
+- Query findings:
+  - System prompt design & communication strategies
+  - Tool integration & execution patterns
+  - Code modification strategies
+  - Validation & error handling
+  - Task planning & memory systems
+
+**Last Updated**: 2025-10-19

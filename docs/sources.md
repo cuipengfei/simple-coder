@@ -1,21 +1,21 @@
-# 文档生产计划（Docs Only，避免基于标题的内容假设）
+# Documentation Production Plan (Docs Only, Avoid Title-Based Assumptions)
 
-资料链接：
+Source Links:
 - https://deepwiki.com/x1xhlol/system-prompts-and-models-of-ai-tools?ref=ghuntley.com
 - https://deepwiki.com/ghuntley/how-to-build-a-coding-agent
 - https://deepwiki.com/SWE-agent/mini-swe-agent
 
-目标与范围
-- 仅产出 docs/ 下的文档；不根据资料标题或常识推断内容，一切以实际阅读为准。
+Goals & Scope
+- Produce only documents under docs/; do not infer content from titles or common knowledge; every point grounded in actual reading.
 
-流程（精简）
-- R1 获取与预读：记录元数据（作者、更新时间、链接快照）。
-- R2 精读与摘录：逐段引用原文要点，标注锚点/段落位置与时间戳。
-- R3 归纳与问题：在摘录之上提炼要点与开放问题；严禁引入未证结论。
-- R4 交叉对照：三份资料的共识/分歧/空白点。
-- R5 成稿与主题导航：在 docs/ 建立导航与主题页，基于阅读结果决定结构与标题。
+Process (Condensed)
+- R1 Acquire & pre-read: record metadata (author, update time, link snapshot).
+- R2 Close read & extract: quote key points by section, mark anchors/positions/timestamps.
+- R3 Synthesize & questions: derive highlights & open issues from extracts; forbid unsubstantiated conclusions.
+- R4 Cross-compare: consensus/divergence/gaps across the three sources.
+- R5 Final draft & thematic navigation: create navigation & thematic pages based on actual reading results.
 
-现有产出（已完成命名）
+Existing Outputs (Named)
 - sources/notes-system-prompts.md
 - sources/notes-coding-agent.md
 - sources/notes-mini-swe-agent.md
@@ -25,22 +25,22 @@
 - references/glossary.md
 - references/citations.md
 
-后续占位（可启动）
-- interactive-modes.md（UI 原型已完成，待撰写交互模式总结：最小 UI、客户端上下文、截断文案与结果呈现）
-- validation-error-handling.md（工具执行后验证策略；待集成测试完成）
-- tool-systems.md（工具抽象进一步扩展后，如新增并行或多步）
-- task-planning-memory.md（若引入更丰富的会话期上下文与规划逻辑，可并入 open-questions 或单列）
+Future Placeholders (Potential)
+- interactive-modes.md (UI prototype done; summarize interaction modes: minimal UI, client context, truncation messaging & result presentation)
+- validation-error-handling.md (post-tool execution validation strategies; pending integration tests)
+- tool-systems.md (after expanding tool abstraction e.g., parallel or multi-step)
+- task-planning-memory.md (if richer session context & planning added; may merge into open-questions or stand alone)
 
-里程碑
-- M1：完成三份 notes（R1–R2）。
-- M2：完成 syntheses（R3–R4）。
-- M3：完成 references 与主题导航（R5）。
-- M4：新增验证/交互扩展文档（视实现进度）。
+Milestones
+- M1: Complete three notes (R1–R2).
+- M2: Complete syntheses (R3–R4).
+- M3: Complete references & thematic navigation (R5).
+- M4: Add validation/interaction extension docs (dependent on implementation progress).
 
-质量标准
-- 可追溯：所有结论需有对应原文引用与锚点。
-- 不臆测：不以标题/常识推断；不引入实现细节未支持的扩展。
-- 简洁清晰：短句与列表优先；统一术语与链接格式。
+Quality Standards
+- Traceable: every conclusion has source citation & anchor.
+- No conjecture: avoid title/common knowledge inference; no unsupported implementation extensions.
+- Concise & clear: short sentences & lists prioritized; unified terminology & link formatting.
 
-说明
-- 原导航 README 已删除；导航功能由 FEATURES.md + 本文件承担。
+Notes
+- Original navigation README removed; navigation handled by FEATURES.md + this file.
