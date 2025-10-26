@@ -67,17 +67,17 @@ public class SimpleLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 
     private void logRequest(ChatClientRequest request) {
         log.info("=== LLM Request (Full Prompt) ===");
-        
+
         var messages = request.prompt().getInstructions();
         log.info("Total messages in prompt: {}", messages.size());
-        
+
         for (int i = 0; i < messages.size(); i++) {
             var message = messages.get(i);
             String content = message.getText();  // Content interface method
-            log.info("Message[{}] type={}: {}", 
-                     i, 
-                     message.getMessageType(), 
-                     truncate(content, 500));
+            log.info("Message[{}] type={}: {}",
+                    i,
+                    message.getMessageType(),
+                    truncate(content, 500));
         }
     }
 
@@ -92,28 +92,28 @@ public class SimpleLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 
         var results = chatResponse.getResults();
         log.info("Total generations: {}", results.size());
-        
+
         for (int i = 0; i < results.size(); i++) {
             var generation = results.get(i);
             var assistantMessage = generation.getOutput();
-            
+
             // Log text content
             String textContent = assistantMessage.getText();
             if (textContent != null && !textContent.isEmpty()) {
                 log.info("Generation[{}] text: {}", i, truncate(textContent, 500));
             }
-            
+
             // Log tool calls (critical for ReAct loop observability)
             var toolCalls = assistantMessage.getToolCalls();
             if (toolCalls != null && !toolCalls.isEmpty()) {
                 log.info("Generation[{}] tool calls: {} call(s)", i, toolCalls.size());
                 for (int j = 0; j < toolCalls.size(); j++) {
                     var toolCall = toolCalls.get(j);
-                    log.info("  ToolCall[{}]: id='{}', name='{}', args={}", 
-                             j, 
-                             toolCall.id(), 
-                             toolCall.name(), 
-                             truncate(toolCall.arguments(), 300));
+                    log.info("  ToolCall[{}]: id='{}', name='{}', args={}",
+                            j,
+                            toolCall.id(),
+                            toolCall.name(),
+                            truncate(toolCall.arguments(), 300));
                 }
             }
         }
@@ -128,7 +128,7 @@ public class SimpleLoggerAdvisor implements CallAdvisor, StreamAdvisor {
     /**
      * Truncates a string to the specified maximum length, appending "... (truncated)" if needed.
      *
-     * @param text the text to truncate
+     * @param text      the text to truncate
      * @param maxLength maximum length before truncation
      * @return truncated string or original if shorter than maxLength
      */

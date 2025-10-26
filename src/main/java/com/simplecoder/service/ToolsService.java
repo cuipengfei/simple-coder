@@ -115,8 +115,8 @@ public class ToolsService {
             @ToolParam(description = "Whether pattern is regex (default false)", required = false) Boolean isRegex,
             @ToolParam(description = "Whether search is case-sensitive (default false)", required = false) Boolean caseSensitive) {
 
-        log.info("Tool invoked: searchText - pattern='{}', searchPath='{}', isRegex={}, caseSensitive={}", 
-                 pattern, searchPath, isRegex, caseSensitive);
+        log.info("Tool invoked: searchText - pattern='{}', searchPath='{}', isRegex={}, caseSensitive={}",
+                pattern, searchPath, isRegex, caseSensitive);
 
         try {
             // Validation: pattern cannot be empty
@@ -172,8 +172,8 @@ public class ToolsService {
             @ToolParam(description = "Old string to replace") String oldString,
             @ToolParam(description = "New string to replace with") String newString) {
 
-        log.info("Tool invoked: replaceText - filePath='{}', oldStringLength={}, newStringLength={}", 
-                 filePath, oldString != null ? oldString.length() : 0, newString != null ? newString.length() : 0);
+        log.info("Tool invoked: replaceText - filePath='{}', oldStringLength={}, newStringLength={}",
+                filePath, oldString != null ? oldString.length() : 0, newString != null ? newString.length() : 0);
 
         try {
             // Validation: strings cannot be null or empty

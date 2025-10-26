@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 /**
  * Configuration to intercept and log raw HTTP requests/responses
  * sent to the OpenAI API (or compatible endpoints).
- *
+ * <p>
  * Provides optional pretty-printed JSON, ANSI colors, truncation safeguards,
  * and header masking (Authorization).
  */
@@ -203,6 +203,9 @@ public class HttpLoggingConfig {
         CYAN("\u001B[36m"),
         GREEN("\u001B[32m");
         final String code;
-        Ansi(String code) { this.code = code; }
+
+        Ansi(String code) {
+            this.code = code;
+        }
     }
 }
