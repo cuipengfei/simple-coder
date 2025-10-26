@@ -5,6 +5,8 @@ simple-coder:
   max-file-lines: 500
   max-search-results: 50
   max-list-results: 200
+  agent:
+    max-steps: 10
 
 spring:
   ai:

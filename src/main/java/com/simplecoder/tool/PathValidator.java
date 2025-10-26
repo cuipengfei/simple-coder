@@ -1,5 +1,6 @@
 package com.simplecoder.tool;
 
+import com.simplecoder.exception.SecurityViolationException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,7 +17,7 @@ import java.nio.file.Paths;
  * According to docs/IMPLEMENTATION.md § PathValidator:
  * - All file operations must be within repo-root
  * - Resolves relative paths and normalizes them
- * - Throws SecurityException for paths outside repo
+ * - Throws SecurityViolationException for paths outside repo
  */
 @Getter
 @Slf4j
@@ -41,7 +42,7 @@ public class PathValidator {
      *
      * @param pathString path to validate (relative or absolute)
      * @return normalized absolute Path within repo
-     * @throws SecurityException        if path is outside repository root
+     * @throws SecurityViolationException if path is outside repository root
      * @throws IllegalArgumentException if path is null or empty
      */
     public Path validate(String pathString) {
@@ -87,7 +88,7 @@ public class PathValidator {
                     path, repoRoot
             );
             log.warn("Security violation: {}", errorMsg);
-            throw new SecurityException(errorMsg);
+            throw new SecurityViolationException("PATH_ESCAPE", errorMsg);
         }
     }
 

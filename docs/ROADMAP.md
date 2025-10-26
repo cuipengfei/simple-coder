@@ -41,7 +41,7 @@ Boundaries:
 ## Sprint A – ReAct Loop Foundations
 
 ### Task R-1: Analyze current AgentService
-Status: todo
+Status: done
 Goal: Map single-turn flow & data dependencies
 Investigation: Review existing docs + AgentService.java
 Test Cases (Write First - Human Review Required): None (analysis only) – human reviews output document
@@ -53,7 +53,7 @@ Boundaries:
 - No code changes
 
 ### Task R-2: Exception taxonomy design
-Status: todo
+Status: done
 Goal: Plan recoverable vs terminal exceptions
 Investigation: Review existing docs (no external needed)
 Test Cases (Write First - Human Review Required): None (design only)
@@ -65,7 +65,7 @@ Boundaries:
 - Avoid implementation; design only
 
 ### Task R-3: ExecutionContext record
-Status: todo
+Status: done
 Goal: Define fields: stepCount, maxSteps, terminated, reason
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required):
@@ -79,7 +79,7 @@ Boundaries:
 - No logic yet
 
 ### Task R-4: ExecutionStep record
-Status: todo
+Status: done
 Goal: Define fields: stepNumber, actionPrompt, toolName, resultSummary, tasksSnapshot
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required):
@@ -92,7 +92,7 @@ Boundaries:
 - Keep lean
 
 ### Task R-5: Config max-steps
-Status: todo
+Status: done
 Goal: Add `simple-coder.agent.max-steps` property
 Investigation: Review existing config patterns
 Test Cases (Write First - Human Review Required):
@@ -105,7 +105,7 @@ Boundaries:
 - Do not enable loop logic yet
 
 ### Task R-6: Loop skeleton
-Status: todo
+Status: done
 Goal: While (step<max && !terminated) invoke existing single tool call; collect steps
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required):
@@ -119,7 +119,7 @@ Boundaries:
 - No exception semantics yet
 
 ### Task R-7: Integrate termination checks
-Status: todo
+Status: done
 Goal: Support reasons: COMPLETED (placeholder), STEP_LIMIT
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required):
@@ -133,7 +133,7 @@ Boundaries:
 - No real completion detection yet
 
 ### Task R-8: Recoverable vs terminal exception handling
-Status: todo
+Status: done
 Goal: Catch and classify; continue vs abort
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required):
@@ -147,7 +147,7 @@ Boundaries:
 - Keep messages concise
 
 ### Task R-9: Result aggregation format
-Status: todo
+Status: done
 Goal: Decide output consolidation (concise step summaries)
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required):
@@ -160,8 +160,8 @@ Boundaries:
 - Avoid verbose logs
 
 ### Task R-10: Documentation sync (loop)
-Status: todo
-Goal: Reflect partial loop state as “In Progress”
+Status: done
+Goal: Reflect partial loop state as "In Progress"
 Investigation: Review existing docs
 Test Cases (Write First - Human Review Required): None
 Verification:
@@ -171,14 +171,51 @@ Documentation:
 Boundaries:
 - Keep wording minimal
 
+### Task R-11: Integrate loop into AgentService
+Status: done
+Goal: Replace single-turn ChatClient call in AgentService.process() with AgentLoopService.runLoop() aggregated text output
+Investigation: Review existing AgentService + AgentLoopService
+Test Cases (Write First - Human Review Required):
+1. maxSteps=1 → behavior matches prior single-turn (one step aggregated) ✅
+2. Step limit reached → termination reason == STEP_LIMIT in aggregated output ✅
+3. COMPLETED signal short-circuits before step limit ✅
+Verification:
+- New integration test class passes all above ✅
+- No regression in existing controller tests ✅
+- Aggregated output visible in ToolResponse.data ✅
+Documentation:
+- FEATURES/PRD removed "AgentService integration pending" phrase ✅
+Boundaries:
+- No TODO system, no tasks snapshot, no structured JSON schema changes
+- Keep code diff minimal (<60 LOC)
+
+### Task R-12: Multi-step integration tests & doc sync
+Status: done
+Goal: Add focused integration tests & finalize docs wording after R-11
+Investigation: Review R-11 implementation and aggregated format
+Test Cases (Write First - Human Review Required):
+1. COMPLETED signal precedence over STEP_LIMIT ✅
+2. maxSteps reduced to 1 still produces valid aggregated output ✅
+3. Aggregated output line count within expected bound (< 25 lines for 10 steps) ✅ (observed 12 lines for maxSteps=10)
+Verification:
+- mvn test green including new integration tests ✅
+- Aggregated output inspected for formatting stability ✅
+Documentation:
+- IMPLEMENTATION.md ReAct section updated to reflect integrated state ✅
+- ROADMAP Sprint A DoD extended R-1..R-12 ✅
+Boundaries:
+- No UI modifications
+- No introduction of TODO/Bash features
+
 ### Sprint A Definition of Done
-- [ ] R-1 through R-10 tasks marked done
-- [ ] ExecutionContext and ExecutionStep compile successfully
-- [ ] Loop skeleton increments step counter correctly (tests pass)
-- [ ] Termination checks stop at max steps (tests pass)
-- [ ] Documentation status updated to "ReAct Loop (In Progress)"
-- [ ] Human approval obtained for all test cases before implementation
-- [ ] `mvn test` all tests green
+- [x] R-1 through R-12 tasks marked done
+- [x] ExecutionContext and ExecutionStep compile successfully
+- [x] Loop skeleton increments step counter correctly (tests pass)
+- [x] Termination checks stop at max steps (tests pass)
+- [x] Documentation status updated to "ReAct Loop Integrated"
+- [x] Human approval obtained for all test cases before implementation
+- [x] `mvn test` all tests green (including R-11/R-12 integration tests)
+- [x] AgentService multi-step execution functional via /api/agent endpoint
 
 ---
 

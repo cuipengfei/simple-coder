@@ -1,5 +1,211 @@
 # Implementation & Technical Design Plan (ReAct Pattern with TODO System)
 
+## Current Flow Summary (Multi-Step Integrated Implementation)
+
+**Status**: Multi-step loop integrated (AgentService → AgentLoopService). Single-step mode achievable via maxSteps=1. TODO system / bash / powershell still pending.
+
+### Request-Response Lifecycle
+
+```
+┌─────────────┐
+│   Browser   │  (index.html)
+│  (Client)   │
+└──────┬──────┘
+       │ POST /api/agent
+       │ {prompt, toolType, contextHistory[]}
+       ↓
+┌─────────────────────────────────────────────────┐
+│          AgentController.handle()               │
+│  - Logs abbreviated request (first 120 chars)  │
+│  - Delegates to AgentService.process()         │
+└──────────────────┬──────────────────────────────┘
+                   ↓
+┌─────────────────────────────────────────────────┐
+│          AgentService.process()                 │
+│  1. Validate request (prompt non-empty)        │
+│  2. Build context summary from history         │
+│  3. Construct combined prompt:                 │
+│     - Context History (if exists)              │
+│     - User Request                             │
+│  4. Invoke ChatClient with tools               │
+│  5. Parse result (check "Error:" prefix)       │
+│  6. Return ToolResponse                        │
+└──────────────────┬──────────────────────────────┘
+                   ↓
+       ┌───────────┴───────────┐
+       │                       │
+       ↓                       ↓
+┌──────────────┐      ┌────────────────┐
+│ ChatClient   │      │  ToolsService  │
+│ (Spring AI)  │─────→│   (@Tool)      │
+│              │      │  - readFile    │
+│ Configured   │      │  - listFiles   │
+│ with         │      │  - searchText  │
+│ ChatModel +  │      │  - replaceText │
+│ Advisor      │      └────────┬───────┘
+└──────────────┘               │
+       │                       │
+       │                  ┌────┴────────┐
+       │                  │ PathValidator│
+       │                  │  (safety)   │
+       │                  └─────────────┘
+       ↓
+┌─────────────────────────────────────┐
+│   LLM Processing                    │
+│  1. Analyze prompt                  │
+│  2. Select appropriate @Tool        │
+│  3. Extract parameters from NL      │
+│  4. Spring AI invokes tool method   │
+│  5. Return result string            │
+└──────────────────┬──────────────────┘
+                   ↓
+       ToolResponse {success, message, data, error}
+                   ↓
+       ResponseEntity<ToolResponse>
+                   ↓
+┌─────────────┐
+│   Browser   │  Updates UI with result
+└─────────────┘
+```
+
+### Data Flow & Dependencies
+
+**Request Path**:
+```
+ToolRequest (model)
+  ├─ prompt: String (user's natural language request)
+  ├─ toolType: String (default "auto", ignored by backend)
+  └─ contextHistory: List<ContextEntry> (client-maintained, max 20)
+      └─ ContextEntry: {timestamp, prompt, result}
+          └─ getSummary(): "User: X / Result: Y"
+```
+
+**Processing Dependencies**:
+1. **ToolRequest.validate()** → throws IllegalArgumentException if invalid
+2. **ToolRequest.buildContextSummary()** → formats history for LLM context
+3. **ChatClient.prompt().user(combinedPrompt).tools(toolsService).call().content()** → returns String
+4. **Error detection**: result.startsWith("Error:") → ToolResponse.error()
+5. **Success**: ToolResponse.success(message, data)
+
+**Tool Execution**:
+```
+ToolsService (@Tool annotated methods)
+  ├─ Dependencies: PathValidator, @Value configs
+  ├─ Injected limits: maxFileLines(500), maxListResults(200), maxSearchResults(50)
+  └─ Error handling pattern:
+      try { ... }
+      catch (SecurityException e) { return "Error: Security violation - " + message }
+      catch (IOException e) { return "Error: Failed to ... - " + message }
+      catch (Exception e) { return "Error: " + message }
+```
+
+### Method Call Checklist
+
+**AgentController.handle(ToolRequest)**:
+- [x] Logs incoming request (abbreviated prompt)
+- [x] Calls agentService.process(request)
+- [x] Returns ResponseEntity.ok(response)
+
+**AgentService.process(ToolRequest)**:
+- [x] request.validate() - validates prompt and toolType non-empty
+- [x] request.buildContextSummary() - formats history
+- [x] StringBuilder for combined prompt construction
+- [x] Conditional context append (if not blank)
+- [x] chatClient.prompt().user().tools().call().content()
+- [x] Result error prefix check ("Error:")
+- [x] ToolResponse.error() or ToolResponse.success()
+- [x] Exception catch-all → ToolResponse.error("AgentService error", e.getMessage())
+
+**ChatClient.prompt() chain**:
+- [x] .user(combinedPrompt) - sets user message
+- [x] .tools(toolsService) - registers all @Tool methods
+- [x] .call() - executes LLM request
+- [x] .content() - extracts String result
+
+**ToolsService @Tool methods** (common pattern):
+- [x] PathValidator.validate(path) → Path (throws SecurityException)
+- [x] Validation helpers (file exists, line ranges, etc.)
+- [x] File I/O operations (Files.readAllLines, Files.walk, etc.)
+- [x] Formatting helpers (line numbers, truncation messages)
+- [x] Error wrapping: catch → return "Error: ..."
+
+### Configuration Dependencies
+
+**AiConfig.chatClient(ChatModel)**:
+- [x] ChatClient.builder(chatModel)
+- [x] .defaultAdvisors(new SimpleLoggerAdvisor())
+- [x] .build()
+
+**SimpleLoggerAdvisor** (CallAdvisor):
+- [x] Logs user message (first 200 chars)
+- [x] Logs token usage metrics (prompt tokens, generation tokens, total)
+- [x] Order = 0 (runs first in advisor chain)
+
+**PathValidator**:
+- [x] Injected with @Value("${simple-coder.repo-root}")
+- [x] normalize() → convert to absolute path
+- [x] validate() → check within repo boundaries
+- [x] Throws SecurityException if path escapes
+
+### Key Characteristics (Current Implementation)
+
+| Aspect | Current Behavior |
+|--------|------------------|
+| **Execution Model** | Single-turn: one request → one tool call → one response |
+| **Statefulness** | Stateless server; client maintains contextHistory (max 20) |
+| **Tool Selection** | Automatic by LLM (toolType ignored by backend) |
+| **Error Handling** | String-based "Error:" prefix detection |
+| **Concurrency** | Single-threaded (no parallel tool execution) |
+| **Persistence** | None (no database, no file-based storage) |
+| **Validation** | Input validation (ToolRequest); path safety (PathValidator) |
+| **Truncation** | Resource limits enforced (500 lines, 200 files, 50 search results) |
+| **Logging** | SLF4J + SimpleLoggerAdvisor for request/response tracking |
+
+### Data Dependencies Map
+
+```
+ToolRequest ──validates──> IllegalArgumentException (if invalid)
+            ──builds───> String (context summary)
+            ──provides─> String (user prompt)
+                           ↓
+                    AgentService
+                           ↓
+                    ChatClient ←──configured── AiConfig
+                           │                      ↓
+                           │                ChatModel (injected)
+                           │                SimpleLoggerAdvisor
+                           ↓
+                    LLM selects tool
+                           ↓
+                    ToolsService (@Tool methods)
+                           │
+                ┌──────────┴──────────┐
+                ↓                     ↓
+          PathValidator         @Value configs
+          (repo-root)          (limits: lines, results, etc.)
+                ↓                     ↓
+          SecurityException      Resource truncation
+          (if escape)            (partial results)
+                           ↓
+                      String result
+                  ("Error:" or data)
+                           ↓
+                    ToolResponse
+                  {success, message, data, error}
+```
+
+### Missing Features (Planned for ReAct Loop)
+
+- ❌ Multi-step execution (while loop)
+- ❌ ExecutionContext tracking (stepCount, terminated, reason)
+- ❌ ExecutionStep recording (per-iteration state)
+- ❌ TODO system integration (TaskManagerService)
+- ❌ Termination condition detection
+- ❌ Exception taxonomy integration (RecoverableException vs TerminalException)
+- ❌ Bash/PowerShell tool execution
+- ❌ Step aggregation and result formatting
+- ❌ UI TODO panel
+
 ## Implementation Plan
 
 ### Phase 1: Project Setup
@@ -12,7 +218,7 @@
 - `ToolResponse` (success, message, data, error)
 - `ContextEntry` (timestamp, prompt, result)
 - `TaskItem` (id, content, status) — NEW: TODO system data model
-- `ExecutionStep` (stepNumber, action, observation, tasksSnapshot) — NEW: ReAct loop state
+- `ExecutionStep` (stepNumber, actionPrompt, toolName, resultSummary, tasksSnapshot) — ReAct loop iteration record [IMPLEMENTED]
 
 ### Phase 3: Tools (partially completed, extension needed)
 1. `PathValidator` — path safety checks
@@ -79,7 +285,109 @@ ToolsService + TaskManagerService + BashToolService + PowerShellToolService
 ```
 Client carries full context; server stores no session (TODO list is request-scoped only).
 
-### ReAct Loop Implementation (AgentService)
+### Exception Design
+
+**Taxonomy Hierarchy** (Implemented in R-2, integrated in R-8):
+```
+AgentException (base)
+├── RecoverableException (continue loop with observation)
+│   ├── ToolExecutionException     - Tool failed but loop can continue
+│   ├── ValidationException        - Input validation failed
+│   └── ResourceLimitException     - Hit resource limit (e.g., max search results)
+└── TerminalException (abort loop immediately)
+    ├── SecurityViolationException - Path escape, security breach
+    ├── StepLimitExceededException - Max ReAct steps exceeded
+    └── SystemException            - Fatal system errors
+```
+
+**Design Rationale**:
+- **Recoverable**: Errors that provide feedback to agent; loop continues, exception message becomes observation
+- **Terminal**: Fatal errors requiring immediate loop termination; security violations, resource exhaustion, infinite loop prevention
+
+**Implementation Status (R-8 Completed)**:
+- Exception classes: 8 classes in `com.simplecoder.exception` package (R-2)
+- Loop integration: Implemented in AgentLoopService.runLoop() (R-8)
+
+**Actual Usage Pattern** (AgentLoopService.java):
+```java
+for (int i = 1; i <= max; i++) {
+    String raw;
+    try {
+        raw = executor.execute(initialPrompt);
+    } catch (RecoverableException e) {
+        // R-8: Recoverable exception - capture as observation, continue loop
+        raw = e.getMessage();
+    } catch (TerminalException e) {
+        // R-8: Terminal exception - capture error, abort loop immediately
+        raw = e.getTerminationReason() + ": " + e.getMessage();
+        String summary = truncate(raw, 80);
+        ExecutionStep step = new ExecutionStep(i, initialPrompt, "unknown", summary, "");
+        steps.add(step);
+        terminated = true;
+        reason = e.getTerminationReason();
+        break;
+    }
+    // ... continue with normal flow
+}
+```
+
+**Exception Behavior**:
+- **RecoverableException**:
+  - Exception message becomes ExecutionStep.resultSummary
+  - Step counter increments normally
+  - Loop continues to next iteration
+  - Final termination reason: STEP_LIMIT (if max steps reached)
+
+- **TerminalException**:
+  - Exception creates final ExecutionStep with error details
+  - Loop terminates immediately (break)
+  - Final termination reason: e.getTerminationReason() (e.g., "SECURITY_VIOLATION", "SYSTEM_ERROR")
+  - No further steps attempted
+
+### ReAct Loop Implementation (AgentService Integration - R-11/R-12)
+
+**Implementation Status (Post R-11/R-12)**:
+- AgentService.process() integrated with AgentLoopService for multi-step execution
+- SingleTurnExecutor wraps ChatClient invocations
+- Aggregated result formatted and returned via ToolResponse
+- Multi-step integration tests added (6 test cases in AgentServiceMultiStepIntegrationTest)
+
+**Actual Implementation Pattern** (R-11):
+```java
+public ToolResponse process(ToolRequest request) {
+    request.validate();
+
+    // Build context-aware prompt
+    String contextSummary = request.buildContextSummary();
+    String combinedPrompt = buildCombinedPrompt(contextSummary, request.getPrompt());
+
+    // Create executor wrapping ChatClient
+    SingleTurnExecutor executor = (prompt) -> {
+        return chatClient.prompt()
+            .user(prompt)
+            .tools(toolsService)
+            .call()
+            .content();
+    };
+
+    // Execute multi-step loop
+    AgentLoopService loopService = new AgentLoopService(properties, executor);
+    LoopResult result = loopService.runLoop(combinedPrompt);
+
+    // Return aggregated result
+    return ToolResponse.success("Multi-step execution completed", result.aggregated());
+}
+```
+
+**Key Design Decisions**:
+1. **SingleTurnExecutor as Lambda**: Encapsulates ChatClient logic inline, avoiding new classes
+2. **Aggregated Output**: `AggregatedResultFormatter.format()` produces concise multi-step summary (<25 lines for 10 steps)
+3. **Context Handling**: Initial prompt built once with context history; reused across loop iterations (R-6 simplification)
+4. **ToolResponse Mapping**: `aggregated` string placed in `data` field; `message` indicates completion status
+
+**Design Target (Future Enhancements)**:
+The following pseudocode represents full ReAct capabilities (deferred to future sprints with TODO system integration):
+
 ```java
 public ToolResponse process(ToolRequest request) {
     request.validate();

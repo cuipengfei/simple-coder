@@ -1,5 +1,8 @@
 package com.simplecoder.service;
 
+import com.simplecoder.exception.SecurityViolationException;
+import com.simplecoder.exception.SystemException;
+import com.simplecoder.exception.ValidationException;
 import com.simplecoder.tool.PathValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
@@ -64,15 +67,16 @@ public class ToolsService {
 
             return buildReadFileMessage(filePath, range, allLines.size(), selectedLines.size()) + "\n\n" + formattedContent;
 
-        } catch (SecurityException e) {
-            log.warn("Security violation in readFile: {}", e.getMessage());
-            return "Error: Security violation - " + e.getMessage();
+        } catch (ValidationException e) {
+            throw e; // re-throw validation exceptions
+        } catch (SecurityViolationException e) {
+            throw e; // re-throw security exceptions (already TerminalException)
         } catch (IOException e) {
             log.error("IO error reading file: {}", e.getMessage(), e);
-            return "Error: Failed to read file - " + e.getMessage();
+            throw new SystemException("Failed to read file: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error in readFile", e);
-            return "Error: " + e.getMessage();
+            throw new SystemException("Unexpected error in readFile: " + e.getMessage(), e);
         }
     }
 
@@ -89,15 +93,14 @@ public class ToolsService {
 
             return formatListFilesMessage(path, truncatedResults.size(), results.size()) + "\n\n" + String.join("\n", truncatedResults);
 
-        } catch (SecurityException e) {
-            log.warn("Security violation in listFiles: {}", e.getMessage());
-            return "Error: Security violation - " + e.getMessage();
+        } catch (SecurityViolationException e) {
+            throw e; // re-throw security exceptions
         } catch (IOException e) {
             log.error("IO error listing files: {}", e.getMessage(), e);
-            return "Error: Failed to list files - " + e.getMessage();
+            throw new SystemException("Failed to list files: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error in listFiles", e);
-            return "Error: " + e.getMessage();
+            throw new SystemException("Unexpected error in listFiles: " + e.getMessage(), e);
         }
     }
 
@@ -109,6 +112,11 @@ public class ToolsService {
             @ToolParam(description = "Whether search is case-sensitive (default false)", required = false) Boolean caseSensitive) {
 
         try {
+            // Validation: pattern cannot be empty
+            if (pattern == null || pattern.trim().isEmpty()) {
+                throw new ValidationException("pattern", "Search pattern cannot be null or empty");
+            }
+
             boolean regex = isRegex != null ? isRegex : false;
             boolean caseSens = caseSensitive != null ? caseSensitive : false;
 
@@ -137,16 +145,17 @@ public class ToolsService {
             return message + "\n\n" + String.join("\n", results);
 
         } catch (java.util.regex.PatternSyntaxException e) {
-            return "Error: Invalid regex pattern - " + e.getMessage();
-        } catch (SecurityException e) {
-            log.warn("Security violation in searchText: {}", e.getMessage());
-            return "Error: Security violation - " + e.getMessage();
+            throw new ValidationException("pattern", "Invalid regex pattern: " + e.getMessage());
+        } catch (ValidationException e) {
+            throw e; // re-throw validation exceptions
+        } catch (SecurityViolationException e) {
+            throw e; // re-throw security exceptions (already TerminalException)
         } catch (IOException e) {
             log.error("IO error during search: {}", e.getMessage(), e);
-            return "Error: Search failed - " + e.getMessage();
+            throw new SystemException("Search failed due to IO error: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error in searchText", e);
-            return "Error: " + e.getMessage();
+            throw new SystemException("Unexpected error in searchText: " + e.getMessage(), e);
         }
     }
 
@@ -157,29 +166,37 @@ public class ToolsService {
             @ToolParam(description = "New string to replace with") String newString) {
 
         try {
+            // Validation: strings cannot be null or empty
+            if (oldString == null || oldString.isEmpty()) {
+                throw new ValidationException("oldString", "Old string cannot be null or empty");
+            }
+            if (newString == null) {
+                throw new ValidationException("newString", "New string cannot be null");
+            }
+
             Path file = pathValidator.validate(filePath);
 
             if (!Files.exists(file)) {
-                return "Error: File not found: " + filePath;
+                throw new ValidationException("filePath", "File not found: " + filePath);
             }
 
             if (!Files.isRegularFile(file)) {
-                return "Error: Path is not a regular file: " + filePath;
+                throw new ValidationException("filePath", "Path is not a regular file: " + filePath);
             }
 
             if (oldString.equals(newString)) {
-                return "Error: Old string and new string are identical - no replacement needed";
+                throw new ValidationException("oldString", "Old string and new string are identical - no replacement needed");
             }
 
             String content = Files.readString(file);
             int occurrences = countOccurrences(content, oldString);
 
             if (occurrences == 0) {
-                return "Error: Old string '" + truncate(oldString, 50) + "' not found in file";
+                throw new ValidationException("oldString", "Old string '" + truncate(oldString, 50) + "' not found in file");
             }
 
             if (occurrences > 1) {
-                return "Error: Old string '" + truncate(oldString, 50) + "' appears " + occurrences + " times (must be unique for safety)";
+                throw new ValidationException("oldString", "Old string '" + truncate(oldString, 50) + "' appears " + occurrences + " times (must be unique for safety)");
             }
 
             String newContent = content.replace(oldString, newString);
@@ -188,21 +205,23 @@ public class ToolsService {
             log.info("Successful replacement in {}", file);
             return "Replaced '" + truncate(oldString, 30) + "' with '" + truncate(newString, 30) + "' in " + filePath;
 
-        } catch (SecurityException e) {
-            log.warn("Security violation in replaceText: {}", e.getMessage());
-            return "Error: Security violation - " + e.getMessage();
+        } catch (ValidationException e) {
+            throw e; // re-throw validation exceptions
+        } catch (SecurityViolationException e) {
+            throw e; // re-throw security exceptions
         } catch (IOException e) {
             log.error("IO error during replacement: {}", e.getMessage(), e);
-            return "Error: Failed to replace - " + e.getMessage();
+            throw new SystemException("Failed to replace text: " + e.getMessage(), e);
         } catch (Exception e) {
             log.error("Unexpected error in replaceText", e);
-            return "Error: " + e.getMessage();
+            throw new SystemException("Unexpected error in replaceText: " + e.getMessage(), e);
         }
     }
 
     // Helper methods for readFile
 
-    private record LineRange(int start, int end, boolean wasTruncated) {}
+    private record LineRange(int start, int end, boolean wasTruncated) {
+    }
 
     private void validateFileExists(Path file, String filePath) throws IOException {
         if (!Files.exists(file)) {
@@ -213,18 +232,18 @@ public class ToolsService {
         }
     }
 
-    private LineRange validateAndParseLineRange(Integer startLine, Integer endLine, int totalLines) throws IOException {
+    private LineRange validateAndParseLineRange(Integer startLine, Integer endLine, int totalLines) {
         int start = startLine != null ? startLine : 1;
         int end = endLine != null ? Math.min(endLine, totalLines) : totalLines;
 
         if (start < 1) {
-            throw new IOException("Line numbers must be >= 1");
+            throw new ValidationException("startLine", "Line numbers must be >= 1");
         }
         if (start > totalLines) {
-            throw new IOException("Start line " + start + " exceeds file length (" + totalLines + " lines)");
+            throw new ValidationException("startLine", "Start line " + start + " exceeds file length (" + totalLines + " lines)");
         }
         if (end < start) {
-            throw new IOException("End line must be >= start line");
+            throw new ValidationException("endLine", "End line must be >= start line");
         }
 
         return new LineRange(start, end, false);

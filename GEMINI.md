@@ -1,52 +1,98 @@
 # GEMINI.md
 
-Roles & Flow
-- Gemini: planning / review (focus only on architectural alignment & substantive issues); Claude Code: implementation / testing (produce minimal viable code).
-- Process: plan → code → review → iterate.
-- Educational context: non‑production example; forbid over‑engineering / nit‑picking; skip style & micro‑optimizations; close loop quickly with minimal dependencies.
+Concise guidance for Gemini (planning / review) role. Repository content must stay English-only (runtime user chat in Chinese; keep code terms English). Keep this file terse; defer details to PRD / FEATURES / IMPLEMENTATION / ROADMAP.
 
-Educational Scope Declaration
-- Repository is a "minimal educational Coding Agent" example, not a production system; review emphasis: functional correctness, spec alignment, minimal safety (path boundary, prevent mistaken replace).
-- Out of review scope: high concurrency, large‑scale performance tuning, complex security hardening (unless directly impacting clarity or correctness).
-- During code/test review: highlight only issues that hinder learning or cause clear errors/misleading outcomes; avoid pure production optimizations (micro performance, abstraction generalization, extensibility refactors).
-- Simplified implementations (single pass file read, line matching, no diff preview) are acceptable; annotate potential extension points with brief comments if needed.
+## 1. Role Boundary
+- Gemini: scope control, architectural reasoning, doc alignment, risk/guardrail enforcement.
+- Claude Code: implements minimal diffs + tests per approved plan.
+- Never over-specify implementation minutiae already clear in docs/code.
 
-Baseline Facts (Current Repository)
-- Tech stack: Java 21, Spring Boot 3.5.6, Spring AI 1.0.3 (spring-ai-bom), depends on spring-ai-starter-model-openai.
-- Architecture: stateless server; client carries context via ToolRequest.contextHistory; no ConversationContext.
-- Existing code: SimpleCoderApplication; models (ContextEntry / ToolRequest / ToolResponse) with unit tests; tools (PathValidator / ListDirTool / ReadFileTool / SearchTool / ReplaceTool) with tests; AgentService (auto tool selection + LLM call) and Controller (REST /api/agent) implemented; application.yml.
-- Pending: minimal UI (single-page HTML/JS), end‑to‑end integration tests (E2E).
+## 2. Core Scenario
+Educational, non-production coding agent demonstrating a multi-step ReAct loop (Reason → Act → Observe) over repository-scoped tools. Server remains stateless: every request supplies full contextHistory. No persistence (TODO system still pending). One tool invocation per loop step.
 
-Current Open Issues (to address later)
-1. (No blocking open issues presently)
+## 3. Architecture Snapshot
+```
+Browser (index.html, keeps last ≤20 interactions)
+  → POST /api/agent (ToolRequest JSON)
+    AgentController → AgentService → AgentLoopService
+      loop(step < maxSteps && !terminated):
+        SingleTurnExecutor → ChatClient.tools(ToolsService)
+          @Tool (readFile | listFiles | searchText | replaceText)
+            PathValidator (repo-root safety)
+      AggregatedResultFormatter → ToolResponse (aggregated summary)
+```
+Constraints: single ChatClient call per step; deterministic side effects; aggregated output typical 12 lines (header + steps + total), hard bound <25 lines for 10 steps.
 
-Note: Model name gpt-4.1 already set in config; treated as valid for current educational scenario; keep docs consistent with key `spring.ai.openai.chat.options.model`.
+## 4. Tool & Output Contracts (MUST NOT CHANGE silently)
+Truncation markers:
+- readFile: `[TRUNCATED: showing first N lines, M more available]`
+- listFiles: `[TRUNCATED: first N items]`
+- searchText: `[TRUNCATED: reached limit N before completing search]` (exact limit with full traversal → no truncation message)
+replaceText must find exactly one occurrence; otherwise return string beginning `Error:`.
+All tool failures begin with `Error:` → mapped to error response semantics.
 
-Resolved Issues (kept for traceability, no longer open)
-- SearchTool truncation semantics divergence: unified behavior (single file limit hit → truncation; directory full traversal equals limit → no truncation), test `testSearchDirectoryExactLimitNoTruncation` verifies.
-- ReadFileTool line numbering & performance: fixed with index loop; test `testReadDuplicateLinesLineNumbersUnique` verifies.
+## 5. Loop & Exceptions
+Step limit configurable (`simple-coder.agent.max-steps`, default 10). Termination reasons: COMPLETED (signal), STEP_LIMIT, plus TerminalException subclasses. Exception taxonomy:
+- RecoverableException → message treated as observation; loop continues.
+- TerminalException (SecurityViolationException, StepLimitExceededException, SystemException, etc.) → abort immediately.
+Do not add new termination signals without updating docs + tests first.
 
-Hard Constraints
-- Single turn: at most one Tool per request; no parallel, no multi‑step planning, no session memory.
-- Security: file operations limited to repo root; ReplaceTool enforces old_string unique match.
-- Dependencies: must check pom.xml before any usage; do not assume adding.
+## 6. Guardrails (Enforced)
+- Stateless: no server memory beyond request scope.
+- Exactly one tool invocation per loop iteration (no chaining/parallel inside a step).
+- Preserve truncation strings verbatim.
+- Maintain aggregated output line limits (<25 lines). Any increase requires prior test updates.
+- No persistence layer, DB, or caching introduction without roadmap change.
+- Path safety via PathValidator mandatory for any file path input.
+- New tools must follow: single-action, deterministic, `Error:` prefix on failures.
+- No silent dependency additions; justify in docs + pom.xml diff.
 
-Configuration Conventions
-- simple-coder.*: repo-root, max-file-lines, max-search-results.
-- Spring AI: `spring.ai.openai.chat.options.model`; API key env var OPENAI_API_KEY.
-- Model name must be updated if actual availability changes (gpt-3.5-turbo may be unavailable).
+## 7. Planning & Review Workflow
+1. Read relevant sections: ROADMAP task + PRD + FEATURES + IMPLEMENTATION.
+2. Validate scope: reject scope creep; propose minimal viable path.
+3. Enumerate test additions (fail-first) for any new/changed behavior.
+4. Only then green-light implementation by Claude Code.
+5. Post-implementation: verify tests, confirm contracts (loop line count, truncation strings, exception reasons) unchanged unless explicitly in scope.
 
-Information Source Priority
-1) docs/ (sources, syntheses, references)
-2) DeepWiki original text (actual reading)
-3) If still unclear ask user, then add anchor citation in docs/
+## 8. When to Block / Request Clarification
+Block if request would:
+- Introduce persistence, multi-tool per step, parallelism, or broaden output length.
+- Alter truncation or error message formats.
+- Mix user-language (Chinese) into repo files.
+- Add speculative features not on ROADMAP without explicit approval.
 
-Working Guidelines
-- Point out only substantive issues; avoid nit‑picking.
-- Read related code/tests/config before changes; keep minimal viable & verifiable.
+## 9. Testing Expectations (Current vs Gaps)
+Covered: loop control flow, termination precedence, aggregation formatting, exception taxonomy, core models, controller pathway.
+Pending (must precede related feature claims): ToolsService truncation & replacement uniqueness tests, TODO system tests (creation / completion termination), bash & powershell execution tests, end-to-end real model path.
+Rule: Any behavioral change → add/update tests first; aggregation line count test must still pass (<25, typical 12).
 
-Development Commands
-- Build: mvn clean compile
-- Test: mvn test
-- Run: mvn spring-boot:run (requires OPENAI_API_KEY)
-- Package: mvn clean package
+## 10. Decision Summary (Do Not Revisit Without Cause)
+- ReAct loop chosen for educational transparency over single-turn shortcut.
+- Stateless design favors reproducibility and clarity.
+- Unique-match replaceText prevents unintended bulk edits.
+- No bash whitelist (documented educational trade-off) once shell tools arrive.
+- Simplicity over production hardening (acceptable risk, documented in PRD).
+
+## 11. Allowed Future Extensions (Roadmap-Gated)
+- TODO system (@Tool) with per-step task snapshots and completion termination.
+- Bash & conditional PowerShell tools (timeout, no whitelist).
+- UI TODO panel + step display.
+(Implement only when corresponding ROADMAP tasks move to in_progress.)
+
+## 12. Reference Commands
+```
+mvn clean compile
+mvn test
+mvn test -Dtest=ToolRequestTest
+mvn spring-boot:run
+```
+
+## 13. Review Checklist (Use Before Approving Changes)
+- Scope matches ROADMAP task ID(s)?
+- No new persistence or multi-tool chaining? 
+- Truncation / error strings unchanged? 
+- Aggregated output lines ≤ previous or justified with test update? 
+- Tests added/updated for every new behavior? 
+- Docs synced (statuses accurate, no stale "planned" where implemented)?
+
+Keep this file concise. For rationale details, consult IMPLEMENTATION.md and ROADMAP.md.
