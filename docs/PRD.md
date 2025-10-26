@@ -21,13 +21,13 @@ Learning Outcomes
 - Recognize common risks (privilege escape, incorrect replace, excessive output, runaway loops) and minimal mitigations.
 
 Current Status
-- **Implemented**: Multi-step loop execution via AgentService → AgentLoopService (step limit, termination detection STEP_LIMIT/COMPLETED, exception taxonomy, aggregation); four file tools (readFile, listFiles, searchText, replaceText) with PathValidator; stateless design; minimal UI; ExecutionStep / ExecutionContext records; max-steps configuration.
+- **Implemented**: Spring AI native ReAct loop via ChatClient with tools registration (autonomous tool calling, multi-turn reasoning, natural termination); four file tools (readFile, listFiles, searchText, replaceText) with PathValidator; stateless design; minimal UI; context history management.
 - **In Progress**: TODO system + dynamic task snapshot integration; structured step-by-step reasoning exposure in UI.
 - **Planned (Not Yet Implemented)**: In-memory TODO system with task management; bash/powershell command execution tools; UI TODO panel.
 - The capabilities described below in "Scope" represent **design targets**. Refer to "Current Status" for what is actually available in the codebase today.
 
 Scope (Educational Version - Design Target)
-- Multi-step execution (Integrated): ReAct pattern (Reasoning → Acting → Observing loop) executed via AgentService → AgentLoopService; step limit (max 10) prevents runaway loops; single-step achievable by setting maxSteps=1.
+- Multi-step execution (Native): Spring AI's ChatClient handles ReAct pattern (Reasoning → Acting → Observing) internally via single `.call()` invocation. Framework autonomously decides tool usage, iteration count, and termination - no manual step counting needed.
 - Session context (Implemented): retain brief message history (user request, model response, tool result summary) while app open; cleared on refresh; no cross-session persistence.
 - Task management (Planned): in-memory TODO system; agent can create/update tasks to show reasoning and progress; exposed to user via UI; cleared on app restart.
 - Minimal tools:
@@ -87,8 +87,8 @@ Milestones
 Limitations & Disclaimers
 - For learning & demonstration only; not for production or sensitive data.
 - No guarantees of quality or security; outputs are educational references.
-- Current implementation status: AgentLoopService (standalone loop skeleton) fully implemented and tested; AgentService integration for multi-step execution pending; full ReAct loop capability not yet available in user-facing API.
+- Current implementation status: Spring AI native ReAct loop fully functional via ChatClient tool registration; framework handles autonomous multi-turn reasoning and termination.
 - Bash/powershell tools (Planned) will have no command whitelist: trusts user not to execute destructive commands (educational simplicity trade-off).
-- Step limit (Implemented in AgentLoopService, max 10): prevents infinite loops but may truncate complex tasks.
+- Natural termination: Spring AI's ReAct loop terminates when the LLM determines the task is complete (no more tool calls needed). This provides more intelligent stopping than arbitrary step limits, though framework-level safeguards against infinite loops exist internally.
 - TODO system (Planned) is in-memory only: cleared on app restart (no persistence for simplicity).
 - Depends on available OpenAI-compatible service: application.yml currently dummy-local with base-url http://localhost:4141 (no /v1); without compatible proxy/service auto tool-calling mode will be unavailable.

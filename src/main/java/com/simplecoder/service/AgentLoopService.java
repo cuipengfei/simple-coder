@@ -5,6 +5,7 @@ import com.simplecoder.exception.RecoverableException;
 import com.simplecoder.exception.TerminalException;
 import com.simplecoder.model.AggregatedResultFormatter;
 import com.simplecoder.model.ExecutionStep;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
  * R-8: Integrates exception handling - RecoverableException continues loop, TerminalException aborts.
  * IF-2: Adds early termination via repetition detection to prevent wasteful iterations.
  */
+@Slf4j
 public class AgentLoopService {
 
     //    todo: too many magic number and long methods in this file. need to make it more srp and more solid, without breaking behavior
@@ -40,7 +42,7 @@ public class AgentLoopService {
         List<ExecutionStep> steps = new ArrayList<>(max);
         boolean terminated = false;
         String reason = null;
-        String previousNormalizedDisplay = null; // stores normalized truncated summary from previous step
+        String previousNormalizedRaw = null; // stores normalized raw content from previous step (pre-truncation)
 
         for (int i = 1; i <= max; i++) { // 1-based step numbers per tests
             String currentPrompt = buildPromptWithContext(initialPrompt, steps);
@@ -70,8 +72,11 @@ public class AgentLoopService {
                 break;
             }
 
-            // Normalize raw for explicit termination signal detection only
+            // Normalize raw for both termination signal detection and repetition comparison
             String normalizedRaw = normalizeSummary(raw);
+            log.debug("Step {}: raw length={}, normalized(first100)={}, matches previous={}", 
+                i, raw.length(), normalizedRaw.length() > 100 ? normalizedRaw.substring(0, 100) : normalizedRaw,
+                previousNormalizedRaw != null && normalizedRaw.equals(previousNormalizedRaw));
 
             if (normalizedRaw.contains("terminationsignalcompleted")) {
                 String summary = truncate(raw, 80);
@@ -88,10 +93,9 @@ public class AgentLoopService {
                 break;
             }
 
-            // Display-based repetition detection: operate on truncated summary user actually sees
-            String summary = truncate(raw, 80);
-            String normalizedDisplay = normalizeSummary(summary);
-            if (previousNormalizedDisplay != null && normalizedDisplay.equals(previousNormalizedDisplay)) {
+            // Repetition detection: compare normalized raw content (pre-truncation) to detect semantic equivalence
+            if (previousNormalizedRaw != null && normalizedRaw.equals(previousNormalizedRaw)) {
+                String summary = truncate(raw, 80);
                 ExecutionStep step = new ExecutionStep(
                         i,
                         initialPrompt,
@@ -101,11 +105,12 @@ public class AgentLoopService {
                 );
                 steps.add(step);
                 terminated = true;
-                reason = "COMPLETED"; // implicit completion due to repeated display output
+                reason = "COMPLETED"; // implicit completion due to repeated raw content
                 break;
             }
-            previousNormalizedDisplay = normalizedDisplay;
+            previousNormalizedRaw = normalizedRaw;
 
+            String summary = truncate(raw, 80);
             ExecutionStep step = new ExecutionStep(
                     i,
                     initialPrompt,
