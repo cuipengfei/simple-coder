@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Coder - 通过构建来学习 coding agent</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/theme/night.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/highlight/monokai.css">
+    <style>
+        :root { --bg:#0f1115; --panel:#161b22; --text:#d9e0e7; --accent:#00ffc8; --accent-alt:#ff2e88; --muted:#6e7681; --edge:#223038; --code-bg:#0c0f13; --grad:radial-gradient(at 30% 20%, #182029, #0f1115 70%); }
+        body { background:var(--bg); font-feature-settings:"tnum"; }
+        .reveal { background:var(--bg); }
+        /* Headings: orbitron primary, mono secondary + nerd icons */
+        .reveal h1, .reveal h2, .reveal h3 { text-transform:none; font-family:'Orbitron','Iosevka','JetBrains Mono','Inter',sans-serif; color:var(--accent); letter-spacing:.6px; position:relative; }
+        .reveal h2::before, .reveal h3::before { content:""; font-family:'JetBrains Mono','Inter',monospace; font-weight:600; display:inline-block; margin-right:.55em; color:var(--accent-alt); filter:drop-shadow(0 0 4px rgba(255,46,136,.4)); }
+        .reveal h1 { text-shadow:0 0 12px rgba(0,255,200,.35),0 0 32px rgba(0,255,200,.15); }
+        .reveal h2 { text-shadow:0 0 10px rgba(0,255,200,.25); }
+        .reveal h3 { text-shadow:0 0 6px rgba(0,255,200,.18); }
+        /* Body text layering */
+        .reveal p, .reveal li, .reveal table, .reveal td, .reveal th { font-family:'Inter','Iosevka','IBM Plex Mono','JetBrains Mono',sans-serif; color:var(--text); }
+        .reveal code, .reveal kbd { font-family:'JetBrains Mono','Fira Code','Cascadia Code','Iosevka','Hack','Source Code Pro',monospace; font-variant-ligatures:contextual discretionary-ligatures; }
+        .reveal small { font-size:0.6em; color:var(--muted); font-family:'Iosevka','JetBrains Mono',monospace; }
+        /* Accent color spans */
+        .reveal .blue { color:var(--accent); text-shadow:0 0 8px rgba(0,255,200,.3); }
+        .reveal .orange { color:var(--accent-alt); text-shadow:0 0 8px rgba(255,46,136,.35); }
+        /* Code blocks */
+        .reveal pre { position:relative; background:var(--grad); border:1px solid var(--edge); box-shadow:0 0 0 1px #0b0e12,0 0 28px rgba(0,0,0,.6); border-radius:8px; overflow:hidden; }
+        .reveal pre code { max-height:500px; background:transparent !important; display:block; padding:14px 18px; line-height:1.35; font-size:.75em; }
+        .reveal pre:after { content:""; pointer-events:none; position:absolute; inset:0; box-shadow:inset 0 -30px 30px -15px #0f1115; }
+        /* Code emphasis: pseudo highlight for keywords (@, record, class) */
+        .reveal pre code { counter-reset:code-ln; }
+        .reveal pre code span.kw { font-family:'Orbitron','JetBrains Mono',monospace; letter-spacing:.7px; color:var(--accent-alt); }
+        /* Tables */
+        .reveal table { border-collapse:separate; border-spacing:0; background:#13171c; border:1px solid var(--edge); box-shadow:0 0 0 1px #101316,0 0 24px rgba(0,0,0,.55); }
+        .reveal th { background:#182028; font-weight:600; font-family:'JetBrains Mono','Inter',sans-serif; }
+        .reveal td, .reveal th { padding:6px 12px; }
+        .reveal tr:nth-child(even) td { background:#141b22; }
+        .reveal tr:hover td { background:#1d2730; }
+        /* Lists */
+        .reveal ul li { position:relative; padding-left:1.2em; }
+        .reveal ul li::before { content:""; font-family:'JetBrains Mono','IBM Plex Mono',monospace; position:absolute; left:0; top:.15em; color:var(--accent-alt); }
+        /* Progress bar */
+        .progress-bar { display:flex; justify-content:space-between; margin:20px 0; font-family:'JetBrains Mono','Iosevka',monospace; }
+        .progress-step { padding:10px 20px; background:#222a33; border:1px solid #2c3641; border-radius:6px; font-size:.65em; letter-spacing:.5px; text-transform:uppercase; font-family:'JetBrains Mono','Iosevka',monospace; }
+        .progress-step.active { background:var(--accent); color:#000; box-shadow:0 0 12px rgba(0,255,200,.45); }
+        /* Fragment animation */
+        .reveal .fragment { opacity:0; transform:translateY(8px) scale(.985); transition:.45s cubic-bezier(.25,.8,.25,1); filter:blur(3px); }
+        .reveal .fragment.visible { opacity:1; transform:translateY(0) scale(1); filter:blur(0); }
+        /* Dev cards */
+        .grid-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:24px; }
+        .dev-card { background:#141a20; padding:16px 18px; border:1px solid #202830; border-radius:10px; transition:border-color .25s, transform .25s, box-shadow .25s; font-family:'JetBrains Mono','Iosevka',monospace; }
+        .dev-card:hover { border-color:var(--accent); transform:translateY(-4px); box-shadow:0 6px 20px -8px rgba(0,255,200,.25); }
+        /* HUD */
+        #hud { position:fixed; top:14px; right:16px; font-size:0.6em; font-family:'JetBrains Mono','Iosevka',monospace; background:#161d22cc; backdrop-filter:blur(4px); padding:6px 10px; border:1px solid #222b32; border-radius:8px; color:var(--muted); letter-spacing:.6px; z-index:1000; display:flex; gap:.55em; align-items:center; }
+        #hud span { color:var(--accent); font-family:'Orbitron','JetBrains Mono',monospace; text-shadow:0 0 6px rgba(0,255,200,.4); }
+        /* Inline code badges */
+        code { background:#12161b; padding:2px 6px; border-radius:6px; border:1px solid #1d242b; font-size:.8em; box-shadow:0 0 0 1px #0d1013,0 0 12px rgba(0,0,0,.55); }
+        /* Emphasis states */
+        .orange strong, .blue strong { font-family:'JetBrains Mono','Orbitron',monospace; letter-spacing:.4px; }
+        /* Background grid overlay */
+        body:before { content:""; position:fixed; inset:0; pointer-events:none; background:
+          linear-gradient(90deg,rgba(255,255,255,0.04) 1px, transparent 1px),
+          linear-gradient(180deg,rgba(255,255,255,0.04) 1px, transparent 1px); background-size:40px 40px; mix-blend-mode:overlay; z-index:-2; }
+        /* Particle canvas */
+        #bg-particles { position:fixed; inset:0; z-index:-3; background:transparent; }
+        /* Slide number styling (Reveal default override) */
+        .reveal .slide-number { font-family:'JetBrains Mono','Iosevka',monospace; background:#12181d; padding:4px 8px; border:1px solid #1f272e; border-radius:6px; box-shadow:0 0 0 1px #0d1013,0 0 18px rgba(0,0,0,.55); }
+        /* Selection */
+        ::selection { background:rgba(0,255,200,.35); color:#fff; }
+        /* Scrollbar (WebKit) */
+        ::-webkit-scrollbar { width:10px; }
+        ::-webkit-scrollbar-track { background:#0d1216; }
+        ::-webkit-scrollbar-thumb { background:#1e272f; border:2px solid #0d1216; border-radius:8px; }
+        ::-webkit-scrollbar-thumb:hover { background:#26333d; }
+    </style>
+</head>
+<body>
+    <canvas id="bg-particles"></canvas>
+    <div id="hud"></div>
+    <div class="reveal">
+        <div class="slides">
+
+<!-- 封面 -->
+<section>
+    <h1>Simple Coder</h1>
+    <h3 class="blue">通过构建来学习 coding agent</h3>
+    <p>用 AI agent 研究 AI agent<br>用 AI agent 构建 AI agent<br>让 AI agent 读取和改进自己的代码</p>
+    <p><small>Java 21 + Spring Boot 3.5.6 + Spring AI 1.0.3</small></p>
+</section>
+
+<!-- 这趟旅程 -->
+<section>
+    <h2>这趟旅程</h2>
+    <div class="progress-bar">
+        <div class="progress-step active">研究</div>
+        <div class="progress-step">设计</div>
+        <div class="progress-step">构建</div>
+        <div class="progress-step">自省</div>
+        <div class="progress-step">元叙事</div>
+    </div>
+    <p class="fragment">从零开始理解 coding agent 的工作原理</p>
+    <p class="fragment">不只是读文档，而是动手实现一个</p>
+</section>
+
+<!-- 第一章：研究 -->
+<section>
+    <section>
+        <h2>第一章：研究</h2>
+        <h3 class="blue">用 agent 研究 agent</h3>
+    </section>
+
+    <section>
+        <h3>为什么要自己做一个？</h3>
+        <ul>
+            <li class="fragment">读开源代码容易迷失</li>
+            <li class="fragment">文档描述和实际行为有差距</li>
+            <li class="fragment">只有构建才能真正理解</li>
+        </ul>
+        <p class="fragment orange">方法：用 AI agent 帮我们研究其他 agent</p>
+    </section>
+
+    <section>
+        <h3>研究工具链</h3>
+        <ul>
+            <li><strong>Claude Code</strong> - 阅读代码、提取关键信息</li>
+            <li><strong>Gemini CLI</strong> - 规划研究路线、评审结果</li>
+            <li><strong>Context7 MCP</strong> - 快速获取库文档</li>
+            <li><strong>DeepWiki MCP</strong> - 深入分析 GitHub 仓库</li>
+        </ul>
+        <p class="fragment"><small>这些工具本身就是 agent，帮我们研究 agent 架构</small></p>
+    </section>
+
+    <section>
+        <h3>关键发现：ReAct 模式</h3>
+        <div style="text-align: center; margin: 40px 0;">
+            <div class="fragment">
+                <span class="blue" style="font-size: 1.5em;">Reasoning</span>
+                <span style="font-size: 1.5em;">→</span>
+            </div>
+            <div class="fragment">
+                <span class="orange" style="font-size: 1.5em;">Acting</span>
+                <span style="font-size: 1.5em;">→</span>
+            </div>
+            <div class="fragment">
+                <span style="font-size: 1.5em;">Observing</span>
+                <span style="font-size: 1.5em;">→</span>
+                <span style="font-size: 1.2em;">🔄</span>
+            </div>
+        </div>
+        <p class="fragment"><small>LLM 思考 → 调用工具 → 查看结果 → 重复</small></p>
+    </section>
+
+    <section>
+        <h3>参考项目</h3>
+        <table style="font-size: 0.7em;">
+            <tr>
+                <th>项目</th>
+                <th>核心学习点</th>
+            </tr>
+            <tr>
+                <td><strong>mini-swe-agent</strong></td>
+                <td>三组件架构 (Agent/Model/Environment)<br>异常驱动控制流、模板系统</td>
+            </tr>
+            <tr>
+                <td><strong>coding-agent</strong></td>
+                <td>Go 事件循环、工具注册、类型安全</td>
+            </tr>
+            <tr>
+                <td><strong>system-prompts</strong></td>
+                <td>精确替换策略、验证循环、并行执行模式</td>
+            </tr>
+        </table>
+        <p class="fragment"><small>详见 <code>docs/sources/</code></small></p>
+    </section>
+
+    <section>
+        <h3>研究输出</h3>
+        <pre><code class="plaintext" data-line-numbers>docs/sources/
+├── notes-mini-swe-agent.md     # 三组件架构分析
+├── notes-coding-agent.md       # Go 实现模式
+└── notes-system-prompts.md     # 多平台提示词策略
+
+docs/syntheses/
+├── architecture-patterns.md    # 架构模式对比
+└── code-modification.md        # 代码修改策略综合</code></pre>
+    </section>
+</section>
+
+<!-- 第二章：设计 -->
+<section>
+    <section>
+        <h2>第二章：设计</h2>
+        <h3 class="blue">从研究到规划</h3>
+    </section>
+
+    <section>
+        <h3>文档驱动开发</h3>
+        <ul>
+            <li class="fragment"><code>PRD.md</code> - 教育目标、范围、非目标</li>
+            <li class="fragment"><code>FEATURES.md</code> - 功能清单</li>
+            <li class="fragment"><code>ROADMAP.md</code> - 分阶段实施计划</li>
+            <li class="fragment"><code>IMPLEMENTATION.md</code> - 技术实现细节</li>
+        </ul>
+        <p class="fragment orange">先写文档，再写代码</p>
+    </section>
+
+    <section>
+        <h3>核心决策</h3>
+        <table style="font-size: 0.7em;">
+            <tr>
+                <th>决策点</th>
+                <th>选择</th>
+                <th>理由</th>
+            </tr>
+            <tr class="fragment">
+                <td>技术栈</td>
+                <td>Java 21 + Spring Boot</td>
+                <td>类型安全、生态成熟</td>
+            </tr>
+            <tr class="fragment">
+                <td>AI 框架</td>
+                <td>Spring AI 1.0.3</td>
+                <td>原生 @Tool 注解、ReAct 内置</td>
+            </tr>
+            <tr class="fragment">
+                <td>架构</td>
+                <td>无状态设计</td>
+                <td>简化实现、教学透明</td>
+            </tr>
+            <tr class="fragment">
+                <td>工具集</td>
+                <td>4 个文件工具</td>
+                <td>最小可用集合</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h3>架构原则</h3>
+        <ul>
+            <li class="fragment"><strong>无状态</strong> - 每次请求独立处理</li>
+            <li class="fragment"><strong>单仓库范围</strong> - PathValidator 限制</li>
+            <li class="fragment"><strong>工具注解驱动</strong> - @Tool 自动注册</li>
+            <li class="fragment"><strong>教育优先</strong> - 透明性 > 性能</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>四个工具</h3>
+        <div style="font-size: 0.8em;">
+            <div class="fragment">
+                <p><strong class="orange">readFile</strong>(filePath, startLine, endLine)</p>
+                <p><small>读取文件，支持行范围，自动截断 500 行</small></p>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">listFiles</strong>(path)</p>
+                <p><small>目录列表或 glob 模式，自动截断 200 项</small></p>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">searchText</strong>(pattern, searchPath, isRegex, caseSensitive)</p>
+                <p><small>文本搜索，支持正则，自动截断 50 结果</small></p>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">replaceText</strong>(filePath, oldString, newString)</p>
+                <p><small>精确替换，必须唯一匹配</small></p>
+            </div>
+        </div>
+    </section>
+</section>
+
+<!-- 第三章：构建（第1部分） -->
+<section>
+    <section>
+        <h2>第三章：构建</h2>
+        <h3 class="blue">用 agent 构建 agent</h3>
+    </section>
+
+    <section>
+        <h3>协作模式</h3>
+        <table style="font-size: 0.8em;">
+            <tr>
+                <th>角色</th>
+                <th>职责</th>
+            </tr>
+            <tr class="fragment">
+                <td><strong class="blue">Gemini</strong></td>
+                <td>规划、评审、风险控制</td>
+            </tr>
+            <tr class="fragment">
+                <td><strong class="orange">Claude Code</strong></td>
+                <td>编码、测试实现</td>
+            </tr>
+        </table>
+        <p class="fragment" style="margin-top: 30px;">流程：Gemini 规划 → Claude 实现 → Gemini 回顾</p>
+    </section>
+
+    <section>
+        <h3>ToolsService 核心</h3>
+        <pre><code class="java" data-line-numbers="1-2,6-9|11-14">@Service
+public class ToolsService {
+
+    private final PathValidator pathValidator;
+    
+    @Tool(description = "Read file contents...")
+    public String readFile(
+        @ToolParam(...) String filePath,
+        @ToolParam(...) Integer startLine,
+        @ToolParam(...) Integer endLine) {
+        
+        Path file = pathValidator.validate(filePath);
+        List&lt;String&gt; lines = Files.readAllLines(file);
+        // 格式化、截断、返回
+    }
+}</code></pre>
+        <p class="fragment"><small>Spring AI 自动扫描 @Tool 方法并注册</small></p>
+    </section>
+
+    <section>
+        <h3>PathValidator 安全机制</h3>
+        <pre><code class="java" data-line-numbers="1-3|5-11">public Path validate(String pathString) {
+    Path resolvedPath = resolvePath(pathString);
+    Path normalizedPath = resolveSymlinks(resolvedPath);
+    
+    if (!normalizedPath.startsWith(repoRoot)) {
+        throw new SecurityViolationException(
+            "PATH_ESCAPE",
+            "Path outside repository root"
+        );
+    }
+    return normalizedPath;
+}</code></pre>
+        <p class="fragment orange">所有文件操作必须在仓库根目录内</p>
+    </section>
+
+    <section>
+        <h3>异常分类体系</h3>
+        <table style="font-size: 0.75em;">
+            <tr>
+                <th>异常类型</th>
+                <th>触发场景</th>
+                <th>处理方式</th>
+            </tr>
+            <tr class="fragment">
+                <td><strong>ValidationException</strong></td>
+                <td>参数验证失败</td>
+                <td>返回错误消息</td>
+            </tr>
+            <tr class="fragment">
+                <td><strong>SecurityViolationException</strong></td>
+                <td>路径安全违规</td>
+                <td>阻止操作</td>
+            </tr>
+            <tr class="fragment">
+                <td><strong>SystemException</strong></td>
+                <td>IO 错误等系统级错误</td>
+                <td>记录日志</td>
+            </tr>
+        </table>
+        <p class="fragment"><small>AgentService 捕获并封装为 ToolResponse</small></p>
+    </section>
+
+    <section>
+        <h3>数据模型</h3>
+        <div style="font-size: 0.75em;">
+            <div class="fragment">
+                <p><strong class="blue">ToolRequest</strong></p>
+                <pre><code class="java">record ToolRequest(
+    String prompt,
+    List&lt;ContextEntry&gt; contextHistory
+) {}</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong class="blue">ToolResponse</strong></p>
+                <pre><code class="java">record ToolResponse(
+    boolean success,
+    String message
+) {}</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Web 接口</h3>
+        <pre><code class="java" data-line-numbers>@RestController
+public class AgentController {
+
+    @PostMapping("/api/agent")
+    public ToolResponse process(
+        @RequestBody ToolRequest request) {
+        
+        return agentService.process(request);
+    }
+}</code></pre>
+        <p class="fragment"><small>简单的 REST API，无状态设计</small></p>
+    </section>
+
+    <section>
+        <h3>测试覆盖</h3>
+        <ul style="font-size: 0.8em;">
+            <li class="fragment"><code>AgentControllerTest</code> - 控制器层测试</li>
+            <li class="fragment"><code>ToolsServiceExceptionTest</code> - 工具异常测试</li>
+            <li class="fragment"><code>ContextEntryTest</code> - 上下文模型测试</li>
+            <li class="fragment"><code>ToolRequestTest</code> - 请求验证测试</li>
+            <li class="fragment"><code>ToolResponseTest</code> - 响应模型测试</li>
+        </ul>
+        <p class="fragment orange">每个核心组件都有测试</p>
+    </section>
+
+    <section>
+        <h3>前端实现</h3>
+        <ul>
+            <li class="fragment">单页应用 (static/index.html)</li>
+            <li class="fragment">多行文本输入框</li>
+            <li class="fragment">执行按钮 + 加载状态</li>
+            <li class="fragment">等宽字体结果展示</li>
+            <li class="fragment">保留最近 20 条交互记录</li>
+        </ul>
+        <p class="fragment"><small>原生 HTML + Fetch API，无框架依赖</small></p>
+    </section>
+
+    <!-- 真实案例剖析子章节 -->
+    <section>
+        <h3>🔗 四方协作：一次完整请求的旅程</h3>
+        <p style="font-size: 0.75em;">User → Simple Coder → Spring AI → LLM API</p>
+        <div style="font-size: 0.65em; line-height: 1.8; margin-top: 20px;">
+            <div class="fragment">
+                <p><strong class="blue">1️⃣ User</strong></p>
+                <p>POST /api/agent <code>{"prompt": "读两个相关 Java 文件并总结"}</code></p>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">2️⃣ Simple Coder (我们的代码)</strong></p>
+                <p>AgentController → AgentService<br>
+                <code>.validate() → .buildContextSummary()</code></p>
+            </div>
+            <div class="fragment">
+                <p><strong style="color: #32CD32;">3️⃣ Spring AI (框架层)</strong></p>
+                <p>构建 OpenAI 请求 + ReAct 循环管理<br>
+                POST <code>/v1/chat/completions</code></p>
+            </div>
+            <div class="fragment">
+                <p><strong style="color: #FF69B4;">4️⃣ LLM API (GPT-5-mini)</strong></p>
+                <p>推理 → 决策 tool_calls<br>
+                返回 <code>{finish_reason, tool_calls, usage}</code></p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>🔍 Round 1: 探索仓库结构</h3>
+        <p style="font-size: 0.7em; color: #888;">时间: ~1.3s | Tokens: 446→472 (+26)</p>
+        <div style="font-size: 0.6em; text-align: left;">
+            <div class="fragment">
+                <p><strong style="color: #32CD32;">📤 Spring AI 发送</strong></p>
+                <pre><code class="json">{
+  "messages": [{"role": "user", "content": "read one java file..."}],
+  "tools": [listFiles, readFile, searchText, replaceText],
+  "model": "gpt-5-mini",
+  "temperature": 0.7
+}</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong style="color: #FF69B4;">📥 LLM 响应</strong></p>
+                <pre><code class="json">{
+  "finish_reason": "tool_calls",  ← 需要继续
+  "tool_calls": [{
+    "name": "listFiles",
+    "arguments": "{\"path\":\"**/*.java\"}"  ← 智能决策
+  }]
+}</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">⚙️ Simple Coder 执行</strong></p>
+                <p><code>ToolsService.listFiles("**/*.java")</code> → 返回 20 个文件路径</p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>📖 Round 2: 并行读取相关文件</h3>
+        <p style="font-size: 0.7em; color: #888;">时间: ~2.3s | Tokens: 740→1008 (+268)</p>
+        <div style="font-size: 0.6em; text-align: left;">
+            <div class="fragment">
+                <p><strong style="color: #32CD32;">📤 上下文累积</strong></p>
+                <pre><code class="json">messages: [
+  {user: "read one java file..."},
+  {assistant: tool_calls[listFiles]},
+  {tool: "Found 20 items...", tool_call_id: "call_oO..."}
+]</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong style="color: #FF69B4;">📥 LLM 决策（并行调用）</strong></p>
+                <pre><code class="json">tool_calls: [
+  {name: "readFile", arguments: "AgentController.java"},
+  {name: "readFile", arguments: "AgentService.java"}
+]</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">⚙️ Simple Coder 执行</strong></p>
+                <p>顺序执行 2 次工具调用 → 返回两文件完整内容（带行号）</p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>✨ Round 3: 综合生成中文总结</h3>
+        <p style="font-size: 0.7em; color: #888;">时间: ~3.1s | Tokens: 1891→2303 (+412)</p>
+        <div style="font-size: 0.6em; text-align: left;">
+            <div class="fragment">
+                <p><strong style="color: #32CD32;">📤 上下文累积</strong></p>
+                <pre><code class="json">messages: [
+  {user}, {assistant: tool_calls[listFiles]}, {tool: "20 files"},
+  {assistant: tool_calls[readFile x2]},
+  {tool: "AgentController 内容"}, {tool: "AgentService 内容"}
+]</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong style="color: #FF69B4;">📥 LLM 生成答案</strong></p>
+                <pre><code class="json">{
+  "finish_reason": "stop",  ← 任务完成
+  "message": {
+    "content": "两文件核心关系概述（简短）：\n- AgentController..."
+  }
+}</code></pre>
+            </div>
+            <div class="fragment">
+                <p><strong class="orange">✅ Simple Coder 返回</strong></p>
+                <p><code>ToolResponse.success("AI response", result)</code> → HTTP 200</p>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>📊 关键数据与设计验证</h3>
+        <table style="font-size: 0.7em;">
+            <tr>
+                <th>指标</th>
+                <th>Round 1</th>
+                <th>Round 2</th>
+                <th>Round 3</th>
+            </tr>
+            <tr>
+                <td>Prompt Tokens</td>
+                <td>446</td>
+                <td>740 (+66%)</td>
+                <td>1891 (+155%)</td>
+            </tr>
+            <tr>
+                <td>工具调用</td>
+                <td>1 (listFiles)</td>
+                <td>2 (readFile 并行)</td>
+                <td>0 (生成答案)</td>
+            </tr>
+            <tr>
+                <td>finish_reason</td>
+                <td>tool_calls</td>
+                <td>tool_calls</td>
+                <td>stop ✅</td>
+            </tr>
+        </table>
+        <div style="font-size: 0.7em; margin-top: 20px;">
+            <p class="fragment"><strong class="blue">✅ 并行调用验证</strong><br>
+            Round 2 响应的 <code>tool_calls</code> 数组包含 2 项</p>
+            <p class="fragment"><strong class="orange">✅ 无状态验证</strong><br>
+            每轮 HTTP 请求都包含完整 messages 历史</p>
+            <p class="fragment"><strong style="color: #32CD32;">✅ 总消耗</strong><br>
+            6.7 秒 | 3,783 tokens | 3 轮 HTTP 往返</p>
+        </div>
+    </section>
+</section>
+
+
+<!-- 第四章：自省 -->
+<section>
+    <section>
+        <h2>第四章：自省</h2>
+        <h3 class="blue">agent 读取自己</h3>
+    </section>
+
+    <section>
+        <h3>已验证能力</h3>
+        <ul>
+            <li class="fragment"><code>listFiles("src/**/*.java")</code><br><small>列出自身源码文件</small></li>
+            <li class="fragment"><code>readFile("...ToolsService.java")</code><br><small>读取工具实现</small></li>
+            <li class="fragment"><code>searchText("@Tool", "src/main/java", ...)</code><br><small>搜索自身工具注解</small></li>
+            <li class="fragment"><code>readFile("docs/PRD.md")</code><br><small>阅读设计文档</small></li>
+        </ul>
+        <p class="fragment orange">agent 可以理解自己的结构</p>
+    </section>
+
+    <section>
+        <h3>元循环示例</h3>
+        <div style="font-size: 0.75em; text-align: left;">
+            <p><strong>用户提问：</strong></p>
+            <p class="fragment">"读取你自己的 ToolsService.java，找出有多少个 @Tool 方法"</p>
+            <br>
+            <p class="fragment"><strong>agent 执行：</strong></p>
+            <p class="fragment">[第 1 轮] 调用 <code>readFile("...ToolsService.java")</code></p>
+            <p class="fragment">[第 2 轮] 分析结果，返回：</p>
+            <p class="fragment blue">"我有 4 个工具：readFile、listFiles、searchText、replaceText"</p>
+        </div>
+    </section>
+
+    <section>
+        <h3>自我改进的可能性与限制</h3>
+        <table style="font-size: 0.7em;">
+            <tr>
+                <th>能力</th>
+                <th>状态</th>
+            </tr>
+            <tr class="fragment">
+                <td>读取自己的代码</td>
+                <td class="blue">✅ 已实现</td>
+            </tr>
+            <tr class="fragment">
+                <td>调用 replaceText 修改代码</td>
+                <td class="orange">⚠️ 理论可行</td>
+            </tr>
+            <tr class="fragment">
+                <td>修改后自动生效</td>
+                <td>❌ 需重新编译</td>
+            </tr>
+            <tr class="fragment">
+                <td>热加载</td>
+                <td>❌ 未实现</td>
+            </tr>
+        </table>
+        <p class="fragment"><small>教育项目，未实现自动重启机制</small></p>
+    </section>
+
+    <section>
+        <h3>递归深度可视化</h3>
+        <div style="font-size: 0.9em; line-height: 2;">
+            <p class="fragment">agent 研究 agent 架构 <span class="blue">→</span></p>
+            <p class="fragment">agent 构建 agent 系统 <span class="blue">→</span></p>
+            <p class="fragment">agent 读取 agent 代码 <span class="blue">→</span></p>
+            <p class="fragment">agent 撰写 agent 文档 <span class="blue">→</span></p>
+            <p class="fragment orange">agent 制作 agent 演示幻灯片 <span class="blue">→ ...</span></p>
+        </div>
+    </section>
+</section>
+
+<!-- 第五章：元叙事 -->
+<section>
+    <section>
+        <h2>第五章：元叙事</h2>
+        <h3 class="blue">这个演示也是 agent 做的</h3>
+    </section>
+
+    <section>
+        <h3>README.md 的完整循环</h3>
+        <ol style="font-size: 0.8em;">
+            <li class="fragment">人类定义目标："写 README 骨架，只说已实现的功能"</li>
+            <li class="fragment">Gemini CLI agent 执行：
+                <ul>
+                    <li>读取 ToolsService.java</li>
+                    <li>读取 AgentService.java</li>
+                    <li>读取 docs/sources.md</li>
+                    <li>读取测试文件列表</li>
+                </ul>
+            </li>
+            <li class="fragment">生成 README.md 骨架</li>
+            <li class="fragment">人类审核、调整</li>
+        </ol>
+    </section>
+
+    <section>
+        <h3>这个幻灯片的创建过程</h3>
+        <ol style="font-size: 0.8em;">
+            <li class="fragment">人类："基于 README 做 Reveal.js 幻灯片"</li>
+            <li class="fragment">Gemini agent：
+                <ul>
+                    <li>读取 README.md</li>
+                    <li>读取 docs/ 研究笔记</li>
+                    <li>读取实际代码验证事实</li>
+                </ul>
+            </li>
+            <li class="fragment">生成 slides.html（你现在看到的这个）</li>
+            <li class="fragment">人类打开浏览器查看</li>
+        </ol>
+        <p class="fragment orange">元注释：agent 在描述自己的创建过程</p>
+    </section>
+
+    <section>
+        <h3>学到的五件事</h3>
+        <ol>
+            <li class="fragment"><strong>ReAct 模式不神秘</strong><br><small>Reasoning → Acting → Observing → 重复</small></li>
+            <li class="fragment"><strong>工具就是函数</strong><br><small>@Tool 注解 + 描述，LLM 自动调用</small></li>
+            <li class="fragment"><strong>安全很重要</strong><br><small>路径验证、唯一替换、异常分类</small></li>
+            <li class="fragment"><strong>框架做重活</strong><br><small>Spring AI 处理循环控制，我们聚焦业务</small></li>
+            <li class="fragment"><strong>agent 可以自省</strong><br><small>读代码、分析结构、撰写文档</small></li>
+        </ol>
+    </section>
+</section>
+
+<!-- 快速开始 -->
+<section>
+    <section>
+        <h2>快速开始</h2>
+    </section>
+
+    <section>
+        <h3>运行项目</h3>
+        <pre><code class="bash">mvn spring-boot:run</code></pre>
+        <p class="fragment">浏览器访问：<code>http://localhost:8080</code></p>
+        <br>
+        <h3 class="fragment">测试</h3>
+        <pre class="fragment"><code class="bash">mvn test</code></pre>
+    </section>
+
+    <section>
+        <h3>示例请求</h3>
+        <pre><code class="json">{
+  "prompt": "列出所有 Java 文件",
+  "contextHistory": []
+}</code></pre>
+        <p class="fragment"><small>POST http://localhost:8080/api/agent</small></p>
+    </section>
+</section>
+
+<!-- 技术栈与局限性 -->
+<section>
+    <section>
+        <h2>技术细节</h2>
+    </section>
+
+    <section>
+        <h3>技术栈</h3>
+        <table style="font-size: 0.75em;">
+            <tr>
+                <th>组件</th>
+                <th>版本/技术</th>
+            </tr>
+            <tr>
+                <td>Java</td>
+                <td>21</td>
+            </tr>
+            <tr>
+                <td>Spring Boot</td>
+                <td>3.5.6</td>
+            </tr>
+            <tr>
+                <td>Spring AI</td>
+                <td>1.0.3 (ChatClient + @Tool)</td>
+            </tr>
+            <tr>
+                <td>前端</td>
+                <td>原生 HTML + Fetch API</td>
+            </tr>
+            <tr>
+                <td>测试</td>
+                <td>JUnit 5</td>
+            </tr>
+            <tr>
+                <td>构建</td>
+                <td>Maven</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h3>关键特性</h3>
+        <ul style="font-size: 0.75em;">
+            <li class="fragment">✅ ReAct 工具循环（Spring AI 原生）</li>
+            <li class="fragment">✅ 工具自动调用（@Tool 注解扫描）</li>
+            <li class="fragment">✅ 路径安全（PathValidator）</li>
+            <li class="fragment">✅ 精确替换（唯一匹配检查）</li>
+            <li class="fragment">✅ 异常分类（3 层体系）</li>
+            <li class="fragment">✅ 无状态设计（历史由客户端传入）</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>局限性（教育简化）</h3>
+        <ul style="font-size: 0.75em;">
+            <li class="fragment">⚠️ 无持久化存储</li>
+            <li class="fragment">⚠️ 无身份验证</li>
+            <li class="fragment">⚠️ 无命令执行工具（未实现）</li>
+            <li class="fragment">⚠️ 无 TODO 系统（未实现）</li>
+            <li class="fragment">⚠️ 无并行工具执行</li>
+            <li class="fragment">⚠️ 无容器隔离</li>
+        </ul>
+        <p class="fragment orange"><small>这些是有意简化，聚焦核心概念</small></p>
+    </section>
+</section>
+
+<!-- 结尾 -->
+<section>
+    <h2>谢谢</h2>
+    <p class="blue">通过构建来学习 coding agent</p>
+    <br>
+    <p style="font-size: 0.8em;">许可证：<strong>Unlicense</strong> 公共领域声明</p>
+    <p style="font-size: 0.8em;">详见 <a href="https://unlicense.org">https://unlicense.org</a></p>
+    <br>
+    <p class="fragment orange" style="font-size: 0.7em;">元注释：这个幻灯片由 Gemini CLI agent 基于实际代码和研究笔记生成</p>
+</section>
+
+</div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.0.4/plugin/notes/notes.js"></script>
+<script>
+    Reveal.initialize({
+        hash: true,
+        transition: 'fade',
+        transitionSpeed: 'fast',
+        slideNumber: 'c/t',
+        controls: true,
+        progress: true,
+        plugins: [ RevealHighlight, RevealNotes ]
+    });
+</script>
+<script>
+// HUD
+(function(){
+  const hud = document.getElementById('hud');
+  function update(){
+    hud.innerHTML = `<span>${Reveal.getSlidePastCount()+1}</span>/<span>${Reveal.getTotalSlides()}</span> · ${document.querySelector('.present h2,h3')?.textContent||''}`;
+  }
+  Reveal.on('slidechanged', update);
+  Reveal.on('ready', update);
+})();
+// Particles
+(function(){
+  const canvas = document.getElementById('bg-particles');
+  const ctx = canvas.getContext('2d');
+  let w, h; const DPR = window.devicePixelRatio || 1;
+  function resize(){ w = canvas.width = innerWidth * DPR; h = canvas.height = innerHeight * DPR; canvas.style.width = innerWidth+'px'; canvas.style.height = innerHeight+'px'; }
+  window.addEventListener('resize', resize); resize();
+  const particles = Array.from({length: 120}, () => ({
+    x: Math.random()*w,
+    y: Math.random()*h,
+    vx: (Math.random()-0.5)*0.15,
+    vy: (Math.random()-0.5)*0.15,
+    r: Math.random()*1.4+0.4,
+    c: Math.random()<0.5 ? 'rgba(0,255,200,0.35)' : 'rgba(255,46,136,0.35)'
+  }));
+  function step(){
+    ctx.clearRect(0,0,w,h);
+    for(const p of particles){
+      p.x += p.vx; p.y += p.vy;
+      if (p.x<0||p.x>w) p.vx*=-1; if (p.y<0||p.y>h) p.vy*=-1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fillStyle = p.c; ctx.fill();
+    }
+    requestAnimationFrame(step);
+  }
+  step();
+})();
+</script>
+</body>
+</html>
