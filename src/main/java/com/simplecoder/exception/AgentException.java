@@ -3,26 +3,15 @@ package com.simplecoder.exception;
 /**
  * Base exception for all Simple Coder agent-related exceptions.
  *
- * <p>Exception Taxonomy Design:
+ * <p>Exception Hierarchy:
  * <pre>
  * AgentException (base)
- * ├── RecoverableException (continue loop with observation)
- * │   ├── ToolExecutionException     - Tool failed but loop can continue
- * │   ├── ValidationException        - Input validation failed
- * │   └── ResourceLimitException     - Hit resource limit (e.g., max search results)
- * └── TerminalException (abort loop immediately)
- *     ├── SecurityViolationException - Path escape, security breach
- *     ├── StepLimitExceededException - Max ReAct steps exceeded
- *     └── SystemException            - Fatal system errors
+ * ├── ValidationException        - Input validation failed
+ * ├── SecurityViolationException - Path escape, security breach
+ * └── SystemException            - Fatal system errors (IO, runtime)
  * </pre>
  *
- * <p>Design Rationale:
- * <ul>
- *   <li><b>Recoverable</b>: Errors that provide feedback to the agent;
- *       exception message can be used as observation in multi-step scenarios.</li>
- *   <li><b>Terminal</b>: Fatal errors requiring immediate termination;
- *       security violations, resource exhaustion, system failures.</li>
- * </ul>
+ * <p>All exceptions are caught by AgentService and converted to ToolResponse.error().
  */
 public class AgentException extends RuntimeException {
 

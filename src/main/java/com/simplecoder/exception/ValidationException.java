@@ -3,10 +3,9 @@ package com.simplecoder.exception;
 import lombok.Getter;
 
 /**
- * Input validation failed but loop can continue with feedback.
+ * Input validation failed.
  *
- * <p>Thrown when tool parameters fail validation checks. Agent can adjust
- * parameters and retry.
+ * <p>Thrown when tool parameters fail validation checks.
  *
  * <p>Examples:
  * <ul>
@@ -16,7 +15,7 @@ import lombok.Getter;
  * </ul>
  */
 @Getter
-public class ValidationException extends RecoverableException {
+public class ValidationException extends AgentException {
 
     private final String parameterName;
 

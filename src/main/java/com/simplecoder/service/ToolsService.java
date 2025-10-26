@@ -70,7 +70,7 @@ public class ToolsService {
         } catch (ValidationException e) {
             throw e; // re-throw validation exceptions
         } catch (SecurityViolationException e) {
-            throw e; // re-throw security exceptions (already TerminalException)
+            throw e; // re-throw security exceptions
         } catch (IOException e) {
             log.error("IO error reading file: {}", e.getMessage(), e);
             throw new SystemException("Failed to read file: " + e.getMessage(), e);
@@ -149,7 +149,7 @@ public class ToolsService {
         } catch (ValidationException e) {
             throw e; // re-throw validation exceptions
         } catch (SecurityViolationException e) {
-            throw e; // re-throw security exceptions (already TerminalException)
+            throw e; // re-throw security exceptions
         } catch (IOException e) {
             log.error("IO error during search: {}", e.getMessage(), e);
             throw new SystemException("Search failed due to IO error: " + e.getMessage(), e);

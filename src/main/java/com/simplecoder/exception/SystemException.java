@@ -1,25 +1,23 @@
 package com.simplecoder.exception;
 
 /**
- * Fatal system error - terminates loop immediately.
+ * Fatal system error.
  *
- * <p>Thrown for critical system failures that cannot be recovered from within
- * the ReAct loop.
+ * <p>Thrown for critical system failures.
  *
  * <p>Examples:
  * <ul>
- *   <li>Out of memory errors</li>
- *   <li>Critical service unavailable (ChatClient failure)</li>
- *   <li>Unexpected runtime exceptions that compromise system integrity</li>
+ *   <li>IO errors during file operations</li>
+ *   <li>Unexpected runtime exceptions</li>
  * </ul>
  */
-public class SystemException extends TerminalException {
+public class SystemException extends AgentException {
 
     public SystemException(String message) {
-        super("SYSTEM_ERROR", message);
+        super(message);
     }
 
     public SystemException(String message, Throwable cause) {
-        super("SYSTEM_ERROR", message, cause);
+        super(message, cause);
     }
 }
