@@ -52,6 +52,8 @@ public class ToolsService {
             @ToolParam(description = "Starting line number (optional, default 1)", required = false) Integer startLine,
             @ToolParam(description = "Ending line number (optional, default end of file)", required = false) Integer endLine) {
 
+        log.info("Tool invoked: readFile - filePath='{}', startLine={}, endLine={}", filePath, startLine, endLine);
+
         try {
             Path file = pathValidator.validate(filePath);
             validateFileExists(file, filePath);
@@ -84,6 +86,8 @@ public class ToolsService {
     public String listFiles(
             @ToolParam(description = "Directory path or glob pattern (e.g., 'src/docs' or '**/*.txt')") String path) {
 
+        log.info("Tool invoked: listFiles - path='{}'", path);
+
         try {
             Path repoRoot = pathValidator.getRepoRoot();
             boolean isGlob = path.contains("*") || path.contains("?");
@@ -110,6 +114,9 @@ public class ToolsService {
             @ToolParam(description = "Directory or file path to search in") String searchPath,
             @ToolParam(description = "Whether pattern is regex (default false)", required = false) Boolean isRegex,
             @ToolParam(description = "Whether search is case-sensitive (default false)", required = false) Boolean caseSensitive) {
+
+        log.info("Tool invoked: searchText - pattern='{}', searchPath='{}', isRegex={}, caseSensitive={}", 
+                 pattern, searchPath, isRegex, caseSensitive);
 
         try {
             // Validation: pattern cannot be empty
@@ -164,6 +171,9 @@ public class ToolsService {
             @ToolParam(description = "File path relative to repository root") String filePath,
             @ToolParam(description = "Old string to replace") String oldString,
             @ToolParam(description = "New string to replace with") String newString) {
+
+        log.info("Tool invoked: replaceText - filePath='{}', oldStringLength={}, newStringLength={}", 
+                 filePath, oldString != null ? oldString.length() : 0, newString != null ? newString.length() : 0);
 
         try {
             // Validation: strings cannot be null or empty
