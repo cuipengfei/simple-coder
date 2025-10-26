@@ -22,5 +22,12 @@ server:
 
 logging:
   level:
-    org.springframework.ai: DEBUG
+    # HTTP layer - logs raw request/response for each LLM API call
+    com.simplecoder.config.HttpLoggingConfig: INFO
+    
+    # Tool execution layer - logs tool invocations
+    com.simplecoder.service.ToolsService: INFO
+    org.springframework.ai.model.tool: DEBUG
+    
+    # High-level context layer - logs first/last turn
     com.simplecoder.config.SimpleLoggerAdvisor: INFO
