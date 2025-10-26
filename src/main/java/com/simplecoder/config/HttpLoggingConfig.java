@@ -1,8 +1,13 @@
 package com.simplecoder.config;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.client.ClientHttpRequestExecution;
@@ -15,16 +20,33 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Configuration to intercept and log raw HTTP requests/responses
  * sent to the OpenAI API (or compatible endpoints).
- * 
- * This enables visibility into each turn of the ReAct loop at the HTTP layer.
+ *
+ * Provides optional pretty-printed JSON, ANSI colors, truncation safeguards,
+ * and header masking (Authorization).
  */
 @Slf4j
 @Configuration
 public class HttpLoggingConfig {
+
+    @Value("${simple-coder.logging.http.enabled:true}")
+    private boolean enabled;
+
+    @Value("${simple-coder.logging.http.pretty-json:true}")
+    private boolean prettyJson;
+
+    @Value("${simple-coder.logging.http.ansi-colors:true}")
+    private boolean ansiColors;
+
+    @Value("${simple-coder.logging.http.max-body-chars:10000}")
+    private int maxBodyChars;
+
+    private final ObjectMapper mapper = new ObjectMapper();
 
     @Bean
     public RestClient.Builder restClientBuilder() {
@@ -35,47 +57,96 @@ public class HttpLoggingConfig {
     /**
      * Interceptor that logs request and response details for OpenAI API calls.
      */
-    private static class LoggingInterceptor implements ClientHttpRequestInterceptor {
-        
-        private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LoggingInterceptor.class);
+    private class LoggingInterceptor implements ClientHttpRequestInterceptor {
+
+        private final org.slf4j.Logger httpLog = org.slf4j.LoggerFactory.getLogger(LoggingInterceptor.class);
 
         @Override
         public ClientHttpResponse intercept(HttpRequest request, byte[] body,
-                                             ClientHttpRequestExecution execution) throws IOException {
-            // Log request
-            logRequest(request, body);
-
-            // Execute the request
+                                            ClientHttpRequestExecution execution) throws IOException {
+            if (enabled) {
+                logRequest(request, body);
+            }
             ClientHttpResponse response = execution.execute(request, body);
-
-            // Wrap response to allow reading body multiple times
             BufferedClientHttpResponse bufferedResponse = new BufferedClientHttpResponse(response);
-            
-            // Log response
-            logResponse(bufferedResponse);
-
+            if (enabled) {
+                logResponse(bufferedResponse);
+            }
             return bufferedResponse;
         }
 
         private void logRequest(HttpRequest request, byte[] body) {
-            log.info("=== HTTP Request to LLM ===");
-            log.info("URI: {} {}", request.getMethod(), request.getURI());
-            log.info("Headers: {}", request.getHeaders());
+            httpLog.info(color("=== HTTP Request to LLM ===", Ansi.MAGENTA));
+            httpLog.info(color("URI: " + request.getMethod() + " " + request.getURI(), Ansi.YELLOW));
+            httpLog.info(color("Headers: " + maskHeaders(request.getHeaders()), Ansi.CYAN));
             if (body.length > 0) {
                 String bodyStr = new String(body, StandardCharsets.UTF_8);
-                log.info("Request Body: {}", bodyStr);
+                httpLog.info(color("Request Body:" + System.lineSeparator() + formatBody(bodyStr, request.getHeaders()), Ansi.GREEN));
             }
         }
 
         private void logResponse(BufferedClientHttpResponse response) throws IOException {
-            log.info("=== HTTP Response from LLM ===");
-            log.info("Status: {}", response.getStatusCode().value());
-            log.info("Headers: {}", response.getHeaders());
-            
+            httpLog.info(color("=== HTTP Response from LLM ===", Ansi.MAGENTA));
+            httpLog.info(color("Status: " + response.getStatusCode().value(), Ansi.YELLOW));
+            httpLog.info(color("Headers: " + maskHeaders(response.getHeaders()), Ansi.CYAN));
             String bodyStr = new String(response.getBodyBytes(), StandardCharsets.UTF_8);
             if (!bodyStr.isEmpty()) {
-                log.info("Response Body: {}", bodyStr);
+                httpLog.info(color("Response Body:" + System.lineSeparator() + formatBody(bodyStr, response.getHeaders()), Ansi.GREEN));
             }
+        }
+
+        private String formatBody(String raw, HttpHeaders headers) {
+            String processed = raw;
+            if (isJson(headers, raw) && prettyJson) {
+                try {
+                    JsonNode node = mapper.readTree(raw);
+                    processed = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+                } catch (JsonProcessingException e) {
+                    // keep raw if parsing fails
+                }
+            }
+            processed = truncate(processed, maxBodyChars);
+            return processed;
+        }
+
+        private boolean isJson(HttpHeaders headers, String body) {
+            String contentType = headers.getFirst(HttpHeaders.CONTENT_TYPE);
+            if (contentType != null && contentType.toLowerCase().contains("json")) {
+                return true;
+            }
+            char firstNonWs = body.chars()
+                    .mapToObj(c -> (char) c)
+                    .filter(ch -> !Character.isWhitespace(ch))
+                    .findFirst()
+                    .orElse('\0');
+            return firstNonWs == '{' || firstNonWs == '[';
+        }
+
+        private String maskHeaders(HttpHeaders headers) {
+            Map<String, String> masked = headers.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, e -> maskHeaderValue(e.getKey(), e.getValue())));
+            return masked.toString();
+        }
+
+        private String maskHeaderValue(String key, java.util.List<String> values) {
+            if ("Authorization".equalsIgnoreCase(key) && !values.isEmpty()) {
+                return values.stream().map(v -> v.length() <= 12 ? "(masked)" : v.substring(0, 12) + "***").collect(Collectors.joining(","));
+            }
+            return String.join(",", values);
+        }
+
+        private String truncate(String text, int max) {
+            if (text.length() <= max) {
+                return text;
+            }
+            return text.substring(0, max) + System.lineSeparator() + "... (truncated " + max + "/" + text.length() + ")";
+        }
+
+        private String color(String text, Ansi code) {
+            if (!ansiColors) {
+                return text;
+            }
+            return code.code + text + Ansi.RESET.code;
         }
     }
 
@@ -83,13 +154,12 @@ public class HttpLoggingConfig {
      * Wrapper that buffers the response body so it can be read multiple times.
      */
     private static class BufferedClientHttpResponse implements ClientHttpResponse {
-        
+
         private final ClientHttpResponse response;
-        private byte[] body;
+        private final byte[] body;
 
         public BufferedClientHttpResponse(ClientHttpResponse response) throws IOException {
             this.response = response;
-            // Read and buffer the body once
             this.body = StreamUtils.copyToByteArray(response.getBody());
         }
 
@@ -98,8 +168,7 @@ public class HttpLoggingConfig {
         }
 
         @Override
-        public InputStream getBody() throws IOException {
-            // Return a new stream from the buffered bytes
+        public InputStream getBody() {
             return new ByteArrayInputStream(this.body);
         }
 
@@ -119,8 +188,21 @@ public class HttpLoggingConfig {
         }
 
         @Override
-        public org.springframework.http.HttpHeaders getHeaders() {
+        public HttpHeaders getHeaders() {
             return response.getHeaders();
         }
+    }
+
+    /**
+     * ANSI color codes for optional colored logging output.
+     */
+    private enum Ansi {
+        RESET("\u001B[0m"),
+        MAGENTA("\u001B[35m"),
+        YELLOW("\u001B[33m"),
+        CYAN("\u001B[36m"),
+        GREEN("\u001B[32m");
+        final String code;
+        Ansi(String code) { this.code = code; }
     }
 }
