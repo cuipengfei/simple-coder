@@ -113,4 +113,56 @@ class AgentLoopEarlyStopTest {
         assertEquals(5, result.steps().size());
         assertEquals("STEP_LIMIT", result.finalContext().reason());
     }
+
+    @Test
+    @DisplayName("IF-2f: Subtle formatting differences normalized correctly (real-world AI model behavior)")
+    void subtleFormattingNormalized() {
+        AgentLoopProperties props = new AgentLoopProperties();
+        props.setMaxSteps(5);
+
+        int[] callCount = {0};
+        SingleTurnExecutor executor = prompt -> {
+            callCount[0]++;
+            // Simulate real AI responses: semantically identical but with formatting variations
+            return switch (callCount[0]) {
+                case 1 -> TurnResult.withoutTool("这个仓库的 Java 主入口类是：com.simplecoder.SimpleCoderApplication，也就是 src/main/java/com/si");
+                case 2 -> TurnResult.withoutTool("这个仓库的 Java 主入口类是：com.simplecoder.SimpleCoderApplication。");
+                case 3 -> TurnResult.withoutTool("这个仓库的 Java 主入口类是：com.simplecoder.SimpleCoderApplication。  ");
+                default -> TurnResult.withoutTool("这个仓库的Java主入口类是 com.simplecoder.SimpleCoderApplication ");
+            };
+        };
+        
+        AgentLoopService service = new AgentLoopService(props, executor);
+        LoopResult result = service.runLoop("which class is the java main entry point");
+
+        // Steps 2 and 3 should normalize identically despite trailing period difference
+        // BUT step 1 is different (truncated at "si"), so should stop at step 3 (when 2==3)
+        assertEquals(3, result.steps().size());
+        assertEquals("COMPLETED", result.finalContext().reason());
+    }
+
+    @Test
+    @DisplayName("IF-2g: Identical semantic content with only whitespace/punctuation differences stops early")
+    void whitespaceOnlyDifferencesDetected() {
+        AgentLoopProperties props = new AgentLoopProperties();
+        props.setMaxSteps(5);
+
+        int[] callCount = {0};
+        SingleTurnExecutor executor = prompt -> {
+            callCount[0]++;
+            // Same content, different whitespace/punctuation
+            return switch (callCount[0]) {
+                case 1 -> TurnResult.withoutTool("SimpleCoderApplication is the entry point!");
+                case 2 -> TurnResult.withoutTool("SimpleCoderApplication is the entry point!  ");
+                default -> TurnResult.withoutTool("  SimpleCoderApplication is the entry point ! ");
+            };
+        };
+        
+        AgentLoopService service = new AgentLoopService(props, executor);
+        LoopResult result = service.runLoop("what is main class");
+
+        // Should stop at step 2 (first + immediate repeat with whitespace diff)
+        assertEquals(2, result.steps().size());
+        assertEquals("COMPLETED", result.finalContext().reason());
+    }
 }
