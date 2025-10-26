@@ -1,7 +1,6 @@
 package com.simplecoder.config;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
@@ -46,7 +45,7 @@ public class SimpleLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 
     @Override
     public Flux<ChatClientResponse> adviseStream(ChatClientRequest chatClientRequest,
-            StreamAdvisorChain streamAdvisorChain) {
+                                                 StreamAdvisorChain streamAdvisorChain) {
         logRequest(chatClientRequest);
         return streamAdvisorChain.nextStream(chatClientRequest)
                 .doOnComplete(() -> log.info("=== LLM Response (Stream Completed) ==="));
@@ -74,7 +73,7 @@ public class SimpleLoggerAdvisor implements CallAdvisor, StreamAdvisor {
             String textContent = generation.getOutput().getText();
             if (textContent != null && !textContent.isEmpty()) {
                 log.info("Content: {}", textContent.length() > 200 ?
-                    textContent.substring(0, 200) + "... (truncated)" : textContent);
+                        textContent.substring(0, 200) + "... (truncated)" : textContent);
             }
         }
 

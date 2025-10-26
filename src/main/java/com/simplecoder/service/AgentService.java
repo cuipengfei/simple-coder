@@ -27,7 +27,7 @@ public class AgentService {
     public ToolResponse process(ToolRequest request) {
         try {
             request.validate();
-            
+
             // Build prompt with context history if present
             String contextSummary = request.buildContextSummary();
             StringBuilder promptBuilder = new StringBuilder();
@@ -35,7 +35,7 @@ public class AgentService {
                 promptBuilder.append("Context History:\n").append(contextSummary).append("\n\n");
             }
             promptBuilder.append("User Request:\n").append(request.getPrompt());
-            
+
             // Single ChatClient call - Spring AI handles the entire ReAct loop internally:
             // 1. AI decides which tools to call (if any)
             // 2. Framework executes tools automatically
@@ -46,9 +46,9 @@ public class AgentService {
                     .tools(toolsService)  // Register all @Tool methods
                     .call()
                     .content();
-            
+
             return ToolResponse.success("AI response", result);
-            
+
         } catch (Exception e) {
             log.error("Failed to process ToolRequest", e);
             return ToolResponse.error("AgentService error", e.getMessage());

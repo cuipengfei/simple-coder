@@ -43,7 +43,7 @@ public class PathValidator {
      * @param pathString path to validate (relative or absolute)
      * @return normalized absolute Path within repo
      * @throws SecurityViolationException if path is outside repository root
-     * @throws IllegalArgumentException if path is null or empty
+     * @throws IllegalArgumentException   if path is null or empty
      */
     public Path validate(String pathString) {
         validateNotEmpty(pathString);

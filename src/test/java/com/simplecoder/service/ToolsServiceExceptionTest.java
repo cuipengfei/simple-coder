@@ -1,8 +1,8 @@
 package com.simplecoder.service;
 
-import com.simplecoder.exception.ValidationException;
 import com.simplecoder.exception.SecurityViolationException;
 import com.simplecoder.exception.SystemException;
+import com.simplecoder.exception.ValidationException;
 import com.simplecoder.tool.PathValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,8 +43,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.searchText("", "test.txt", false, false)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.searchText("", "test.txt", false, false)
         );
         assertTrue(ex.getMessage().contains("pattern cannot be null or empty"));
     }
@@ -52,8 +52,8 @@ class ToolsServiceExceptionTest {
     @Test
     @DisplayName("IF-1b: searchText throws ValidationException for null pattern")
     void searchTextNullPatternThrowsValidation() {
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.searchText(null, "test.txt", false, false)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.searchText(null, "test.txt", false, false)
         );
         assertTrue(ex.getMessage().contains("pattern cannot be null or empty"));
     }
@@ -68,8 +68,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.searchText("[invalid(regex", "test.txt", true, false)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.searchText("[invalid(regex", "test.txt", true, false)
         );
         assertTrue(ex.getMessage().contains("Invalid regex pattern"));
     }
@@ -84,8 +84,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.readFile("test.txt", -1, 5)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.readFile("test.txt", -1, 5)
         );
         assertTrue(ex.getMessage().contains("Line numbers must be >= 1"));
     }
@@ -100,8 +100,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.readFile("test.txt", 10, 20)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.readFile("test.txt", 10, 20)
         );
         assertTrue(ex.getMessage().contains("exceeds file length"));
     }
@@ -116,8 +116,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.readFile("test.txt", 4, 2)  // start=4, end=2 (both within file length)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.readFile("test.txt", 4, 2)  // start=4, end=2 (both within file length)
         );
         assertTrue(ex.getMessage().contains("End line must be >= start line"));
     }
@@ -132,8 +132,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.replaceText("test.txt", "", "new")
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.replaceText("test.txt", "", "new")
         );
         assertTrue(ex.getMessage().contains("Old string cannot be null or empty"));
     }
@@ -148,8 +148,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.replaceText("test.txt", "old", null)
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.replaceText("test.txt", "old", null)
         );
         assertTrue(ex.getMessage().contains("New string cannot be null"));
     }
@@ -164,8 +164,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.replaceText("test.txt", "nonexistent", "new")
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.replaceText("test.txt", "nonexistent", "new")
         );
         assertTrue(ex.getMessage().contains("not found in file"));
     }
@@ -180,8 +180,8 @@ class ToolsServiceExceptionTest {
             fail("Setup failed");
         }
 
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.replaceText("test.txt", "word", "new")
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.replaceText("test.txt", "word", "new")
         );
         assertTrue(ex.getMessage().contains("appears 3 times"));
         assertTrue(ex.getMessage().contains("must be unique for safety"));
@@ -190,8 +190,8 @@ class ToolsServiceExceptionTest {
     @Test
     @DisplayName("IF-1b: replaceText throws ValidationException for file not found")
     void replaceTextFileNotFoundThrowsValidation() {
-        ValidationException ex = assertThrows(ValidationException.class, () -> 
-            toolsService.replaceText("nonexistent.txt", "old", "new")
+        ValidationException ex = assertThrows(ValidationException.class, () ->
+                toolsService.replaceText("nonexistent.txt", "old", "new")
         );
         assertTrue(ex.getMessage().contains("File not found"));
     }
@@ -199,8 +199,8 @@ class ToolsServiceExceptionTest {
     @Test
     @DisplayName("IF-1a: PathValidator throws SecurityViolationException for path escape")
     void pathValidatorThrowsSecurityViolation() {
-        SecurityViolationException ex = assertThrows(SecurityViolationException.class, () -> 
-            pathValidator.validate("../../etc/passwd")
+        SecurityViolationException ex = assertThrows(SecurityViolationException.class, () ->
+                pathValidator.validate("../../etc/passwd")
         );
         assertTrue(ex.getMessage().contains("outside repository root"));
     }
@@ -217,8 +217,8 @@ class ToolsServiceExceptionTest {
         }
 
         // This will pass PathValidator but fail when trying to read as file
-        assertThrows(SystemException.class, () -> 
-            toolsService.readFile("not-a-file", null, null)
+        assertThrows(SystemException.class, () ->
+                toolsService.readFile("not-a-file", null, null)
         );
     }
 }
